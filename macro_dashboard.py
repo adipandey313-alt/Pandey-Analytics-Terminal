@@ -417,3 +417,28 @@ with tab3:
                     st.error("Ticker not found. Please check the Cheat Sheet above to ensure you are using a valid Yahoo Finance suffix.")
             except Exception as e:
                 st.error(f"Data engine error: {e}")
+# ==========================================
+# SYSTEM FOOTER: METHODOLOGY & DATA ARCHITECTURE
+# ==========================================
+st.markdown("---")
+with st.expander("🛠️ **TERMINAL METHODOLOGY & DATA ARCHITECTURE**"):
+    st.markdown("""
+    **Engineered by:** [Your Name/Pandey Analytics]  
+    **Last System Sync:** {now}
+    
+    ### 📡 Data Pipeline Architecture
+    * **Market Data:** Real-time equity, FX, and commodity feeds are routed through the **Yahoo Finance API** using a fault-tolerant retry engine.
+    * **Economic Benchmarks:** Sovereign yields (US 10Y/2Y) and recession indicators are pulled via the **FRED (Federal Reserve Economic Data)** API.
+    * **News Aggregation:** Live market wires are synthesized via **Google News RSS** feeds based on regional focus areas.
+
+    ### 🧠 AI NLP Sentiment Engine
+    * **Model:** Powered by **Gemini 2.5 Flash** via Google Generative AI.
+    * **Quant Logic:** The system performs a 'zero-shot' classification of live headlines to extract two proprietary metrics:
+        1.  **Risk Score (0-10):** Measures geopolitical and macroeconomic volatility/panic signals.
+        2.  **Sentiment Score (0-10):** Measures growth euphoria vs. contractionary signals.
+    * **Security:** All API credentials are encrypted using **Streamlit Secrets (TOML)** to prevent exposure of sensitive keys in the source code.
+
+    ### 🏢 M&A Fundamentals Desk
+    * **Valuation Logic:** Multiples (EV/EBITDA, P/E) are calculated using TTM (Trailing Twelve Months) data.
+    * **Data Integrity:** International tickers require exchange suffixes (e.g., .NS for India, .L for UK) to ensure correct regional currency and exchange mapping.
+    """.format(now=datetime.now().strftime('%Y-%m-%d %H:%M')))
