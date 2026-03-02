@@ -262,15 +262,17 @@ with tab2:
 
     with ai_col:
         st.markdown("**QUANTITATIVE AI NLP BRIEFING**")
-        api_key = st.text_input("Enter Gemini API Key to Generate AI Briefing:", type="password")
         
-        if api_key:
+        # Pull the key securely from the Streamlit Cloud backend
+        try:
+            api_key = st.secrets["GEMINI_API_KEY"]
+            
+            # The button is now always visible and clickable
             if st.button("Synthesize Executive Briefing"):
                 try:
                     genai.configure(api_key=api_key)
                     model = genai.GenerativeModel('gemini-2.5-flash')
                     
-                    # NEW: Instructions telling the AI to calculate integer scores
                     prompt = f"""You are an elite Global Macro strategy analyst focusing on: {selected_topic}. 
                     Read these live market headlines and provide a highly structured executive summary focusing on how this news impacts capital markets, corporate valuations, or macroeconomic risk in this specific area.
                     
@@ -296,27 +298,26 @@ with tab2:
                         response = model.generate_content(prompt)
                         raw_text = response.text
                         
-                        # NEW: Regex parser to hunt down and extract the AI's hidden numbers
                         risk_match = re.search(r'RISK_SCORE:\s*(\d+)', raw_text)
                         sent_match = re.search(r'SENTIMENT_SCORE:\s*(\d+)', raw_text)
                         
                         risk_score = int(risk_match.group(1)) if risk_match else 5
                         sent_score = int(sent_match.group(1)) if sent_match else 5
                         
-                        # Clean the scores out of the final text before showing it to the user
                         display_text = re.sub(r'RISK_SCORE:.*', '', raw_text)
                         display_text = re.sub(r'SENTIMENT_SCORE:.*', '', display_text)
                         
-                        # Draw the Speedometers
                         g1, g2 = st.columns(2)
                         with g1: st.plotly_chart(create_gauge(risk_score, "Geopolitical/Macro Risk", "#ff4b4b"), use_container_width=True, config={'displayModeBar': False})
                         with g2: st.plotly_chart(create_gauge(sent_score, "Economic Sentiment", "#00ff41"), use_container_width=True, config={'displayModeBar': False})
                         
                         st.markdown(f"<div class='deal-intel'>\n\n{display_text}\n\n</div>", unsafe_allow_html=True)
                 except Exception as e:
-                    st.error(f"API Error: Please check your key. Details: {e}")
-        else:
-            st.info("System Awaiting API Key.")
+                    st.error(f"AI Engine Error: {e}")
+                    
+        except KeyError:
+            # This triggers if you forgot to save the key in Streamlit Settings -> Secrets
+            st.error("🔒 Security Error: Gemini API Key not found in Cloud Secrets.")
 
 # ==========================================
 # TAB 3: M&A FUNDAMENTALS DESK (NEW)
