@@ -97,7 +97,7 @@ def create_gauge(score, title, color):
     return fig
 
 # 3. HEADER
-st.title("WBS INSTITUTIONAL MACRO TERMINAL")
+st.title("PANDEY ANALYTICS MACRO TERMINAL")
 st.write(f"SYSTEM STATUS: ONLINE | HYBRID DATA PIPELINE | {datetime.now().strftime('%Y-%m-%d')}")
 st.markdown("---")
 
