@@ -10,7 +10,7 @@ import re # NEW: Used to extract hidden mathematical scores from the AI's text
 from datetime import datetime, timedelta
 
 # 1. UI SETUP 
-st.set_page_config(page_title="WBS M&A Terminal", layout="wide")
+st.set_page_config(page_title="Macro & Markets Terminal", layout="wide")
 
 st.markdown("""
     <style>
@@ -97,7 +97,7 @@ def create_gauge(score, title, color):
     return fig
 
 # 3. HEADER
-st.title("PANDEY ANALYTICS MACRO TERMINAL")
+st.title("MACRO & MARKETS TERMINAL")
 st.write(f"SYSTEM STATUS: ONLINE | HYBRID DATA PIPELINE | {datetime.now().strftime('%Y-%m-%d')}")
 st.markdown("---")
 
