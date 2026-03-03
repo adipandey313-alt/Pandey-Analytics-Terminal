@@ -3,10 +3,11 @@ import yfinance as yf
 import pandas as pd
 import pandas_datareader as pdr
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import feedparser
 import google.generativeai as genai
 import urllib.parse 
-import re # NEW: Used to extract hidden mathematical scores from the AI's text
+import re 
 from datetime import datetime, timedelta
 
 # 1. UI SETUP 
@@ -117,9 +118,13 @@ with tab1:
         "Global Commodities": {'WTI Crude': 'CL=F', 'Brent Crude': 'BZ=F', 'Copper': 'HG=F', 'Gold': 'GC=F', 'Natural Gas': 'NG=F', 'Silver': 'SI=F'}
     }
     
-    ctrl1, ctrl2 = st.columns([2, 1])
+    # NEW: Added ctrl3 for the Raw Mode Toggle
+    ctrl1, ctrl2, ctrl3 = st.columns([2, 1, 1])
     with ctrl1: selected_region = st.selectbox("🌎 Select Market Workspace:", list(market_regions.keys()))
     with ctrl2: selected_tf = st.selectbox("⏱️ Select Timeframe:", ["1M", "3M", "6M", "YTD", "1Y", "2Y"], index=3)
+    with ctrl3: 
+        st.markdown("<br>", unsafe_allow_html=True) 
+        raw_mode = st.toggle("🔢 Show Raw Prices")
 
     now = datetime.now()
     tf_dates = {
@@ -145,10 +150,25 @@ with tab1:
     r1_1, r1_2 = st.columns(2)
     r2_1, r2_2 = st.columns(2)
     
+    # NEW: Chart Layout now includes Interactive X-Axis menus
     chart_layout = dict(
         template="plotly_dark", paper_bgcolor='black', plot_bgcolor='black', height=420, hovermode="x unified", 
         legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="left", x=0), 
-        margin=dict(l=10, r=10, t=50, b=20), font=dict(color="white")
+        margin=dict(l=10, r=10, t=50, b=20), font=dict(color="white"),
+        xaxis=dict(
+            rangeselector=dict(
+                buttons=list([
+                    dict(count=1, label="1M", step="month", stepmode="backward"),
+                    dict(count=3, label="3M", step="month", stepmode="backward"),
+                    dict(count=6, label="6M", step="month", stepmode="backward"),
+                    dict(count=1, label="YTD", step="year", stepmode="todate"),
+                    dict(count=1, label="1Y", step="year", stepmode="backward"),
+                    dict(step="all", label="MAX")
+                ]),
+                bgcolor="#1a1a1a", activecolor="#ffb900", font=dict(color="white", size=11)
+            ),
+            type="date"
+        )
     )
 
     with r1_1:
@@ -184,12 +204,23 @@ with tab1:
         if selected_region == "Global Commodities":
             st.subheader("Safe Havens (Gold vs US Dollar)")
             gold, dxy = slice_data(fetch_yf('GC=F'), start_date), slice_data(fetch_yf('DX-Y.NYB'), start_date)
-            fig2 = go.Figure()
-            if gold is not None and len(gold) > 0: fig2.add_trace(go.Scatter(x=gold.index, y=(gold/gold.iloc[0]*100).values.flatten(), name="Gold", line=dict(color='#ffb900', width=2)))
-            if dxy is not None and len(dxy) > 0: fig2.add_trace(go.Scatter(x=dxy.index, y=(dxy/dxy.iloc[0]*100).values.flatten(), name="US Dollar (DXY)", line=dict(color='#00ff41', width=2)))
-            fig2.update_layout(**chart_layout)
-            fig2.update_yaxes(title_text="% Change (Base 100)")
-            st.plotly_chart(fig2, use_container_width=True, theme=None)
+            
+            # NEW: Dual-Axis logic for Raw Mode
+            if raw_mode:
+                fig2 = make_subplots(specs=[[{"secondary_y": True}]])
+                if gold is not None and len(gold) > 0: fig2.add_trace(go.Scatter(x=gold.index, y=gold.values.flatten(), name="Gold", line=dict(color='#ffb900', width=2)), secondary_y=False)
+                if dxy is not None and len(dxy) > 0: fig2.add_trace(go.Scatter(x=dxy.index, y=dxy.values.flatten(), name="US Dollar (DXY)", line=dict(color='#00ff41', width=2)), secondary_y=True)
+                fig2.update_layout(**chart_layout)
+                fig2.update_yaxes(title_text="Gold Price ($)", secondary_y=False)
+                fig2.update_yaxes(title_text="DXY Index", secondary_y=True)
+                st.plotly_chart(fig2, use_container_width=True, theme=None)
+            else:
+                fig2 = go.Figure()
+                if gold is not None and len(gold) > 0: fig2.add_trace(go.Scatter(x=gold.index, y=(gold/gold.iloc[0]*100).values.flatten(), name="Gold", line=dict(color='#ffb900', width=2)))
+                if dxy is not None and len(dxy) > 0: fig2.add_trace(go.Scatter(x=dxy.index, y=(dxy/dxy.iloc[0]*100).values.flatten(), name="US Dollar (DXY)", line=dict(color='#00ff41', width=2)))
+                fig2.update_layout(**chart_layout)
+                fig2.update_yaxes(title_text="% Change (Base 100)")
+                st.plotly_chart(fig2, use_container_width=True, theme=None)
         else:
             vix_map = {"Global Baseline": ("Global (US VIX)", "^VIX"), "United States": ("US VIX", "^VIX"), "United Kingdom": ("UK VIX (VFTSE)", "^VFTSE"), "India": ("India VIX", "^INDIAVIX"), "Asia-Pacific": ("Japan VIX (JNIV)", "^JNIV")}
             vix_name, vix_ticker = vix_map.get(selected_region, ("US VIX", "^VIX"))
@@ -206,12 +237,23 @@ with tab1:
         if selected_region == "Global Commodities":
             st.subheader("Economic Bellwether (Copper vs S&P 500)")
             copper, sp500 = slice_data(fetch_yf('HG=F'), start_date), slice_data(fetch_yf('^GSPC'), start_date)
-            fig3 = go.Figure()
-            if copper is not None and len(copper) > 0: fig3.add_trace(go.Scatter(x=copper.index, y=(copper/copper.iloc[0]*100).values.flatten(), name="Copper (HG=F)", line=dict(color='#ff4b4b', width=2)))
-            if sp500 is not None and len(sp500) > 0: fig3.add_trace(go.Scatter(x=sp500.index, y=(sp500/sp500.iloc[0]*100).values.flatten(), name="S&P 500", line=dict(color='#00d4ff', width=2)))
-            fig3.update_layout(**chart_layout)
-            fig3.update_yaxes(title_text="% Change (Base 100)")
-            st.plotly_chart(fig3, use_container_width=True, theme=None)
+            
+            # NEW: Dual-Axis logic for Raw Mode
+            if raw_mode:
+                fig3 = make_subplots(specs=[[{"secondary_y": True}]])
+                if copper is not None and len(copper) > 0: fig3.add_trace(go.Scatter(x=copper.index, y=copper.values.flatten(), name="Copper (HG=F)", line=dict(color='#ff4b4b', width=2)), secondary_y=False)
+                if sp500 is not None and len(sp500) > 0: fig3.add_trace(go.Scatter(x=sp500.index, y=sp500.values.flatten(), name="S&P 500", line=dict(color='#00d4ff', width=2)), secondary_y=True)
+                fig3.update_layout(**chart_layout)
+                fig3.update_yaxes(title_text="Copper Price ($)", secondary_y=False)
+                fig3.update_yaxes(title_text="S&P 500 Index", secondary_y=True)
+                st.plotly_chart(fig3, use_container_width=True, theme=None)
+            else:
+                fig3 = go.Figure()
+                if copper is not None and len(copper) > 0: fig3.add_trace(go.Scatter(x=copper.index, y=(copper/copper.iloc[0]*100).values.flatten(), name="Copper (HG=F)", line=dict(color='#ff4b4b', width=2)))
+                if sp500 is not None and len(sp500) > 0: fig3.add_trace(go.Scatter(x=sp500.index, y=(sp500/sp500.iloc[0]*100).values.flatten(), name="S&P 500", line=dict(color='#00d4ff', width=2)))
+                fig3.update_layout(**chart_layout)
+                fig3.update_yaxes(title_text="% Change (Base 100)")
+                st.plotly_chart(fig3, use_container_width=True, theme=None)
         else:
             st.subheader("Recession Signal (US 10Y-2Y Spread)")
             ten_y, two_y = slice_data(fetch_fred('DGS10'), start_date), slice_data(fetch_fred('DGS2'), start_date)
@@ -234,13 +276,22 @@ with tab1:
             if d is not None: comp[n] = d
         comp = comp.dropna()
         if not comp.empty:
-            norm = (comp / comp.iloc[0]) * 100 
             fig4 = go.Figure()
             colors = ['#ff4b4b', '#00d4ff', '#ffb900', '#00ff41']
-            for i, column in enumerate(norm.columns):
-                fig4.add_trace(go.Scatter(x=norm.index, y=norm[column], name=column, line=dict(color=colors[i], width=2)))
-            fig4.update_layout(**chart_layout)
-            fig4.update_yaxes(title_text="% Change (Base 100)")
+            
+            # NEW: Toggle between raw values and Base 100 percentages
+            if raw_mode:
+                for i, column in enumerate(comp.columns):
+                    fig4.add_trace(go.Scatter(x=comp.index, y=comp[column], name=column, line=dict(color=colors[i], width=2)))
+                fig4.update_layout(**chart_layout)
+                fig4.update_yaxes(title_text="Raw Value")
+            else:
+                norm = (comp / comp.iloc[0]) * 100 
+                for i, column in enumerate(norm.columns):
+                    fig4.add_trace(go.Scatter(x=norm.index, y=norm[column], name=column, line=dict(color=colors[i], width=2)))
+                fig4.update_layout(**chart_layout)
+                fig4.update_yaxes(title_text="% Change (Base 100)")
+                
             st.plotly_chart(fig4, use_container_width=True, theme=None)
 
 # ==========================================
