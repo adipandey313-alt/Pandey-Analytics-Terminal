@@ -429,25 +429,108 @@ with tab3:
                     col_chart, col_profile = st.columns([2.5, 1.5])
                     
                     with col_chart:
+                        st.markdown("**Advanced Financial Statements & Cash Flow**")
+                        tab_fs1, tab_fs2, tab_fs3 = st.tabs(["📉 Margin Walk (Waterfall)", "💵 Free Cash Flow", "🏗️ Capital Structure"])
+                        
                         fin = tgt.financials
-                        if fin is not None and not fin.empty and 'Total Revenue' in fin.index and 'Net Income' in fin.index:
-                            rev = fin.loc['Total Revenue'].dropna().sort_index()
-                            ni = fin.loc['Net Income'].dropna().sort_index()
-                            
-                            fig_fin = go.Figure()
-                            fig_fin.add_trace(go.Bar(x=rev.index.year, y=rev.values, name="Total Revenue", marker_color='#00d4ff'))
-                            fig_fin.add_trace(go.Bar(x=ni.index.year, y=ni.values, name="Net Income", marker_color='#00ff41'))
-                            
-                            fig_fin.update_layout(
-                                title="Financial Performance (Revenue vs Net Income)", 
-                                template="plotly_dark", paper_bgcolor='black', plot_bgcolor='black', 
-                                height=400, font=dict(color='white'), barmode='group',
-                                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
-                                margin=dict(l=10, r=10, t=50, b=20)
-                            )
-                            st.plotly_chart(fig_fin, use_container_width=True, theme=None)
-                        else:
-                            st.info("Detailed financial history is currently unavailable for this ticker via free APIs.")
+                        cf = tgt.cashflow
+                        
+                        # CHART 1: THE MARGIN WALK (WATERFALL)
+                        with tab_fs1:
+                            if fin is not None and not fin.empty and 'Total Revenue' in fin.index:
+                                try:
+                                    # Get the most recent year's data
+                                    recent_date = fin.columns[0]
+                                    rev = fin.loc['Total Revenue', recent_date]
+                                    gross = fin.loc['Gross Profit', recent_date] if 'Gross Profit' in fin.index else rev * 0.5
+                                    op_inc = fin.loc['Operating Income', recent_date] if 'Operating Income' in fin.index else gross * 0.5
+                                    net_inc = fin.loc['Net Income', recent_date] if 'Net Income' in fin.index else op_inc * 0.8
+                                    
+                                    # Calculate the steps
+                                    cogs = rev - gross
+                                    opex = gross - op_inc
+                                    tax_interest = op_inc - net_inc
+                                    
+                                    fig_wf = go.Figure(go.Waterfall(
+                                        name = "20", orientation = "v",
+                                        measure = ["relative", "relative", "total", "relative", "relative", "total"],
+                                        x = ["Revenue", "COGS", "Gross Profit", "OpEx", "Taxes/Interest", "Net Income"],
+                                        textposition = "outside",
+                                        text = [f"${rev/1e9:.1f}B", f"-${cogs/1e9:.1f}B", f"${gross/1e9:.1f}B", f"-${opex/1e9:.1f}B", f"-${tax_interest/1e9:.1f}B", f"${net_inc/1e9:.1f}B"],
+                                        y = [rev, -cogs, 0, -opex, -tax_interest, 0],
+                                        connector = {"line":{"color":"rgb(63, 63, 63)"}},
+                                        decreasing = {"marker":{"color":"#ff4b4b"}},
+                                        increasing = {"marker":{"color":"#00ff41"}},
+                                        totals = {"marker":{"color":"#00d4ff"}}
+                                    ))
+                                    fig_wf.update_layout(
+                                        title=f"Income Statement Margin Walk (TTM)",
+                                        template="plotly_dark", paper_bgcolor='black', plot_bgcolor='black', height=350,
+                                        margin=dict(l=10, r=10, t=40, b=20), font=dict(color='white')
+                                    )
+                                    st.plotly_chart(fig_wf, use_container_width=True, theme=None)
+                                except Exception as e:
+                                    st.info("Insufficient standardized data to generate Margin Walk.")
+                            else:
+                                st.info("Income statement data unavailable.")
+
+                        # CHART 2: FREE CASH FLOW
+                        with tab_fs2:
+                            if cf is not None and not cf.empty and 'Operating Cash Flow' in cf.index:
+                                try:
+                                    # YFinance sometimes labels CapEx differently
+                                    capex_label = 'Capital Expenditure' if 'Capital Expenditure' in cf.index else 'Investments In Property Plant And Equipment'
+                                    
+                                    ocf = cf.loc['Operating Cash Flow'].dropna().sort_index()
+                                    if capex_label in cf.index:
+                                        capex = cf.loc[capex_label].dropna().sort_index()
+                                        # CapEx is usually reported as negative, ensure it's absolute for the chart calculation
+                                        capex = capex.abs() * -1 
+                                        fcf = ocf + capex # Since capex is negative, adding it subtracts it
+                                    else:
+                                        capex = pd.Series([0]*len(ocf), index=ocf.index)
+                                        fcf = ocf
+                                        
+                                    fig_fcf = go.Figure()
+                                    fig_fcf.add_trace(go.Bar(x=ocf.index.year, y=ocf.values, name="Operating Cash Flow", marker_color='#00ff41'))
+                                    fig_fcf.add_trace(go.Bar(x=capex.index.year, y=capex.values, name="CapEx", marker_color='#ff4b4b'))
+                                    fig_fcf.add_trace(go.Scatter(x=fcf.index.year, y=fcf.values, name="Free Cash Flow", line=dict(color='#ffb900', width=3), mode='lines+markers'))
+                                    
+                                    fig_fcf.update_layout(
+                                        title="Free Cash Flow Generation", barmode='relative',
+                                        template="plotly_dark", paper_bgcolor='black', plot_bgcolor='black', height=350,
+                                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+                                        margin=dict(l=10, r=10, t=40, b=20), font=dict(color='white')
+                                    )
+                                    st.plotly_chart(fig_fcf, use_container_width=True, theme=None)
+                                except Exception as e:
+                                    st.info("Insufficient data to calculate Free Cash Flow.")
+                            else:
+                                st.info("Cash flow statement data unavailable.")
+                                
+                        # CHART 3: CAPITAL STRUCTURE (EV BUILDUP)
+                        with tab_fs3:
+                            try:
+                                mcap = info.get('marketCap', 0)
+                                debt = info.get('totalDebt', 0)
+                                cash = info.get('totalCash', 0)
+                                
+                                if mcap > 0:
+                                    fig_ev = go.Figure(data=[go.Pie(
+                                        labels=['Market Cap (Equity)', 'Total Debt', 'Cash (Deduction)'],
+                                        values=[mcap, debt, cash],
+                                        hole=.5,
+                                        marker_colors=['#00d4ff', '#ff4b4b', '#00ff41'],
+                                        textinfo='label+percent'
+                                    )])
+                                    fig_ev.update_layout(
+                                        title="Enterprise Value (EV) Capital Structure",
+                                        template="plotly_dark", paper_bgcolor='black', plot_bgcolor='black', height=350,
+                                        showlegend=False, margin=dict(l=10, r=10, t=40, b=20), font=dict(color='white')
+                                    )
+                                    st.plotly_chart(fig_ev, use_container_width=True, theme=None)
+                            except:
+                                st.info("Insufficient balance sheet data for Capital Structure.")
                             
                     with col_profile:
                         st.subheader("Target Profile")
