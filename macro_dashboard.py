@@ -636,8 +636,12 @@ with tab3:
                                         fig_ff.add_trace(go.Bar(
                                             y=[name], x=[high - low], base=[low],
                                             orientation='h', marker_color=color,
-                                            text=[f"${low:.2f} - ${high:.2f}"], textposition='inside', insidetextanchor='middle',
-                                            textfont=dict(color="black" if color == "#ffb900" else "white", weight="bold"),
+                                            text=[f"${low:.2f} - ${high:.2f}"], 
+                                            textposition='inside', 
+                                            insidetextanchor='middle',
+                                            textangle=0,          # FIX 1: Force text to always remain horizontal
+                                            constraintext='none', # FIX 2: Allow text to overflow small bars without shrinking/rotating
+                                            textfont=dict(color="black" if color == "#ffb900" else "white", weight="bold", size=12),
                                             name=name
                                         ))
                                 
