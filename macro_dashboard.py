@@ -101,8 +101,13 @@ st.title("MACRO & MARKETS TERMINAL")
 st.write(f"SYSTEM STATUS: ONLINE | HYBRID DATA PIPELINE | {datetime.now().strftime('%Y-%m-%d')}")
 st.markdown("---")
 
-# 4. TABS
-tab1, tab2, tab3 = st.tabs(["📊 Macro Data & Indices", "📰 AI Global Intelligence", "📈 M&A Fundamentals Desk"])
+# 4. TABS (NOW 4 TABS)
+tab1, tab2, tab3, tab4 = st.tabs([
+    "📊 Macro Data & Indices", 
+    "📰 AI Global Intelligence", 
+    "🎯 Target Overview & Catalysts", 
+    "📈 Valuation & M&A Engine"
+])
 
 # ==========================================
 # TAB 1: MACRO DATA
@@ -362,13 +367,107 @@ with tab2:
             st.error("🔒 Security Error: Gemini API Key not found in Cloud Secrets.")
 
 # ==========================================
-# TAB 3: M&A FUNDAMENTALS DESK
+# TAB 3: TARGET OVERVIEW & CATALYSTS (NEW)
 # ==========================================
 with tab3:
+    st.markdown("### 🎯 **TARGET OVERVIEW & QUALITATIVE CATALYSTS**")
+    
+    st.markdown("##### **Enter Target Company Ticker:**")
+    ticker_input_cat = st.text_input("Target Catalyst", "TSLA", key="ticker_tab3", label_visibility="collapsed").upper()
+    
+    if ticker_input_cat:
+        with st.spinner(f"Parsing SEC filings and event-driven news for {ticker_input_cat}..."):
+            try:
+                tgt = yf.Ticker(ticker_input_cat)
+                info = tgt.info
+                company_name = info.get('shortName', ticker_input_cat)
+                
+                if 'shortName' in info:
+                    st.markdown(f"#### **{company_name}** | Ownership Profile & Activist Intelligence")
+                    st.markdown("---")
+                    
+                    col_ai, col_own = st.columns([1.5, 1])
+                    
+                    with col_ai:
+                        st.markdown("#### 🤖 **AI Deal Chatter & Catalyst Scanner**")
+                        
+                        # Fetch highly specific company news (M&A, Activist, Buyout focus)
+                        query_str = f'"{company_name}" AND (merger OR acquisition OR buyout OR activist OR "private equity" OR takeover)'
+                        encoded_query = urllib.parse.quote(query_str)
+                        url = f"https://news.google.com/rss/search?q={encoded_query}&hl=en-US&gl=US&ceid=US:en"
+                        feed = feedparser.parse(url)
+                        articles = feed.entries[:6]
+                        
+                        headline_text = "\n".join([f"- {a.title} ({a.link})" for a in articles])
+                        
+                        try:
+                            api_key = st.secrets["GEMINI_API_KEY"]
+                            if st.button("Generate Event-Driven Briefing", key="btn_catalyst"):
+                                if not articles:
+                                    st.info("No recent M&A or activist chatter found on the global wire for this target.")
+                                else:
+                                    genai.configure(api_key=api_key)
+                                    model = genai.GenerativeModel('gemini-2.5-flash')
+                                    prompt = f"""You are an elite Event-Driven Hedge Fund Analyst.
+                                    Review these recent news headlines strictly concerning {company_name}:
+                                    {headline_text}
+                                    
+                                    Provide a concise, highly professional 3-bullet-point executive briefing focusing ONLY on:
+                                    1. Potential M&A rumors or takeover chatter.
+                                    2. Activist investor involvement or board disputes.
+                                    3. Major strategic catalysts (spinoffs, massive capital raises).
+                                    
+                                    If there are no clear catalysts in the headlines, state: "Current news flow is focused on standard operational updates. No immediate M&A or activist catalysts detected."
+                                    Format with bold headings for each bullet."""
+                                    
+                                    with st.spinner("Synthesizing market whispers..."):
+                                        response = model.generate_content(prompt)
+                                        st.markdown(f"<div class='deal-intel'>\n\n{response.text}\n\n</div>", unsafe_allow_html=True)
+                        except KeyError:
+                            st.error("🔒 Security Error: Gemini API Key not found.")
+                            
+                        st.markdown("<br>**Raw Event-Driven Feed:**", unsafe_allow_html=True)
+                        if articles:
+                            for a in articles:
+                                st.write(f"🔗 [{a.title}]({a.link})")
+                        else:
+                            st.write("No catalyst news available.")
+                            
+                    with col_own:
+                        st.markdown("#### 🏛️ **Ownership & SEC Filings**")
+                        tab_inst, tab_insider = st.tabs(["Top Institutional Holders", "Recent Insider Trades"])
+                        
+                        with tab_inst:
+                            st.caption("Largest asset managers and hedge funds holding the stock.")
+                            inst_holders = tgt.institutional_holders
+                            if inst_holders is not None and not inst_holders.empty:
+                                # Clean up dates if available to look professional
+                                if 'Date Reported' in inst_holders.columns:
+                                    inst_holders['Date Reported'] = pd.to_datetime(inst_holders['Date Reported']).dt.strftime('%Y-%m-%d')
+                                st.dataframe(inst_holders, use_container_width=True, hide_index=True)
+                            else:
+                                st.info("Institutional ownership data unavailable.")
+                                
+                        with tab_insider:
+                            st.caption("C-Suite and Board of Directors open-market activity.")
+                            insider_trans = tgt.insider_transactions
+                            if insider_trans is not None and not insider_trans.empty:
+                                # Show the 10 most recent trades
+                                recent_insider = insider_trans.head(10)
+                                st.dataframe(recent_insider, use_container_width=True, hide_index=True)
+                            else:
+                                st.info("No recent insider transactions found in SEC filings.")
+            except Exception as e:
+                st.error(f"Data engine error: {e}")
+
+# ==========================================
+# TAB 4: M&A FUNDAMENTALS DESK (OLD TAB 3)
+# ==========================================
+with tab4:
     st.markdown("### 🏢 **CORPORATE VALUATION & M&A SCREENER**")
     
     st.markdown("##### **Enter Target Company Ticker (e.g., AAPL, MSFT, HCLTECH.NS):**")
-    ticker_input = st.text_input("Target", "TSLA", label_visibility="collapsed").upper()
+    ticker_input = st.text_input("Target", "TSLA", key="ticker_tab4", label_visibility="collapsed").upper()
     
     with st.expander("🌍 **Need help finding international stocks? View the Suffix Cheat Sheet**"):
         st.markdown("""
@@ -678,7 +777,7 @@ with tab3:
                                 st.plotly_chart(fig_ff, use_container_width=True, theme=None)
 
                                 # ==========================================
-                                # NEW FEATURE: LBO DEBT CAPACITY CALCULATOR
+                                # LBO DEBT CAPACITY CALCULATOR
                                 # ==========================================
                                 st.markdown("---")
                                 st.markdown("#### **QUICK-AND-DIRTY LBO CALCULATOR**")
@@ -697,7 +796,6 @@ with tab3:
                                         total_debt = ebitda * leverage_mult
                                         equity_needed = implied_ev - total_debt
                                         
-                                        # Validation
                                         if equity_needed < 0:
                                             st.warning("⚠️ High leverage detected. The transaction is fully debt-funded.")
                                             equity_needed = 0
@@ -708,7 +806,6 @@ with tab3:
                                         st.write(f"**Sponsor Equity Check:** {fmt_b(equity_needed)}")
                                     
                                     with lbo_col2:
-                                        # Visualization: Financing Mix
                                         labels = ['Total Debt Financing', 'Equity Contribution']
                                         values = [total_debt, equity_needed]
                                         
@@ -753,6 +850,10 @@ with st.expander("🛠️ **TERMINAL METHODOLOGY & DATA ARCHITECTURE**"):
         1.  **Risk Score (0-10):** Measures geopolitical and macroeconomic volatility/panic signals.
         2.  **Sentiment Score (0-10):** Measures growth euphoria vs. contractionary signals.
     * **Security:** All API credentials are encrypted using **Streamlit Secrets (TOML)** to prevent exposure of sensitive keys in the source code.
+
+    ### Target Overview & Catalysts
+    * **Event-Driven AI Scanner:** Parses targeted Google News RSS feeds using `(merger OR acquisition OR buyout OR activist)` logic. Gemini synthesizes these into qualitative executive briefings.
+    * **Ownership Profiling:** Extracts live SEC EDGAR data via Yahoo Finance to track major institutional asset managers and C-suite insider trading activity.
 
     ### M&A Fundamentals Desk
     * **Valuation Logic:** Multiples (EV/EBITDA, P/E) are calculated using TTM (Trailing Twelve Months) data.
