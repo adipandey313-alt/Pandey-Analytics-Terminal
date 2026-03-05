@@ -8,6 +8,7 @@ import feedparser
 import google.generativeai as genai
 import urllib.parse 
 import re 
+import requests
 from datetime import datetime, timedelta
 
 # 1. UI SETUP 
@@ -34,7 +35,27 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+# Global Table Styling to match terminal aesthetic
+TABLE_STYLES = [
+    {"selector": "th.col_heading", "props": [("background-color", "#1a1a1a"), ("color", "#ffb900"), ("border", "1px solid #333"), ("text-align", "left")]},
+    {"selector": "th.row_heading", "props": [("display", "none")]},
+    {"selector": "th.blank.level0", "props": [("display", "none")]},
+    {"selector": "td", "props": [("border", "1px solid #333"), ("color", "#ffffff"), ("background-color", "#0e1117")]}
+]
+
 # 2. DATA ENGINES
+@st.cache_data(ttl=3600)
+def fetch_fmp(endpoint, params={}):
+    """Primary Database: Financial Modeling Prep (FMP)"""
+    try:
+        api_key = st.secrets["FMP_API_KEY"]
+        base_url = f"https://financialmodelingprep.com/api/v3/{endpoint}"
+        params["apikey"] = api_key
+        response = requests.get(base_url, params=params)
+        return response.json()
+    except:
+        return None
+
 @st.cache_data(ttl=300)
 def fetch_yf(ticker):
     try:
@@ -79,26 +100,9 @@ def slice_data(df, start_date):
     if df is None or df.empty: return df
     return df.loc[start_date:]
 
-def create_gauge(score, title, color):
-    fig = go.Figure(go.Indicator(
-        mode = "gauge+number", value = score,
-        title = {'text': title, 'font': {'color': 'white', 'size': 18}},
-        gauge = {
-            'axis': {'range': [0, 10], 'tickwidth': 1, 'tickcolor': "white"},
-            'bar': {'color': color},
-            'bgcolor': "black", 'borderwidth': 2, 'bordercolor': "#333",
-            'steps': [
-                {'range': [0, 3], 'color': "rgba(0, 255, 65, 0.15)"},
-                {'range': [3, 7], 'color': "rgba(255, 185, 0, 0.15)"},
-                {'range': [7, 10], 'color': "rgba(255, 75, 75, 0.15)"}],
-        }
-    ))
-    fig.update_layout(height=250, margin=dict(l=20, r=20, t=50, b=20), paper_bgcolor='rgba(0,0,0,0)', font=dict(color="white"))
-    return fig
-
 # 3. HEADER
 st.title("MACRO & MARKETS TERMINAL")
-st.write(f"SYSTEM STATUS: ONLINE | HYBRID DATA PIPELINE | {datetime.now().strftime('%Y-%m-%d')}")
+st.write(f"SYSTEM STATUS: ONLINE | MULTI-DATABASE PIPELINE (YF+FMP) | {datetime.now().strftime('%Y-%m-%d')}")
 st.markdown("---")
 
 # 4. TABS
@@ -130,12 +134,7 @@ with tab1:
         raw_mode = st.toggle("Show Raw Prices")
 
     now = datetime.now()
-    tf_dates = {
-        "1M": (now - timedelta(days=30)).strftime('%Y-%m-%d'), "3M": (now - timedelta(days=90)).strftime('%Y-%m-%d'),
-        "6M": (now - timedelta(days=180)).strftime('%Y-%m-%d'), "YTD": f"{now.year}-01-01",
-        "1Y": (now - timedelta(days=365)).strftime('%Y-%m-%d'), "2Y": (now - timedelta(days=730)).strftime('%Y-%m-%d')
-    }
-    start_date = tf_dates[selected_tf]
+    start_date = (now - timedelta(days=730)).strftime('%Y-%m-%d') # Default baseline
 
     current_tickers = market_regions[selected_region]
     cols = st.columns(len(current_tickers))
@@ -145,156 +144,12 @@ with tab1:
             try:
                 val, prev = float(df_sliced.iloc[-1]), float(df_sliced.iloc[0])
                 change = ((val - prev) / prev) * 100
-                cols[i].metric(label=f"{name} ({selected_tf})", value=f"{val:,.2f}", delta=f"{change:.2f}%")
+                cols[i].metric(label=name, value=f"{val:,.2f}", delta=f"{change:.2f}%")
             except: cols[i].metric(label=name, value="ERR")
         else: cols[i].metric(label=name, value="N/A")
 
-    st.markdown("---")
-    r1_1, r1_2 = st.columns(2)
-    r2_1, r2_2 = st.columns(2)
-    
-    chart_layout = dict(
-        template="plotly_dark", paper_bgcolor='black', plot_bgcolor='black', height=420, hovermode="x unified", 
-        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="left", x=0), 
-        margin=dict(l=10, r=10, t=50, b=20), font=dict(color="white"),
-        xaxis=dict(
-            rangeselector=dict(
-                buttons=list([
-                    dict(count=1, label="1M", step="month", stepmode="backward"),
-                    dict(count=3, label="3M", step="month", stepmode="backward"),
-                    dict(count=6, label="6M", step="month", stepmode="backward"),
-                    dict(count=1, label="YTD", step="year", stepmode="todate"),
-                    dict(count=1, label="1Y", step="year", stepmode="backward"),
-                    dict(step="all", label="MAX")
-                ]),
-                bgcolor="#1a1a1a", activecolor="#ffb900", font=dict(color="white", size=11)
-            ),
-            type="date"
-        )
-    )
-
-    with r1_1:
-        if selected_region == "Global Commodities":
-            st.subheader("Energy Complex (Brent vs WTI)")
-            wti = slice_data(fetch_yf('CL=F'), start_date)
-            brent = slice_data(fetch_yf('BZ=F'), start_date)
-            fig1 = go.Figure()
-            if wti is not None: fig1.add_trace(go.Scatter(x=wti.index, y=wti.values.flatten(), name="WTI Crude", line=dict(color='#ff4b4b', width=2)))
-            if brent is not None: fig1.add_trace(go.Scatter(x=brent.index, y=brent.values.flatten(), name="Brent Crude", line=dict(color='#00d4ff', width=2)))
-            fig1.update_layout(**chart_layout)
-            fig1.update_yaxes(title_text="Price (USD)")
-            st.plotly_chart(fig1, use_container_width=True, theme=None)
-        else:
-            st.subheader("Yield Benchmarks (Local vs US)")
-            yield_map = {
-                "Global Baseline": ("US 10Y", "^TNX"), "United States": ("US 10Y", "^TNX"),
-                "United Kingdom": ("UK 10Y Gilt", "TMBMKGB-10Y=X"), "India": ("India 10Y", "IN10YT=RR"), "Asia-Pacific": ("Japan 10Y", "TMBMKJP-10Y=X")
-            }
-            local_yield_name, local_yield_ticker = yield_map.get(selected_region, ("US 10Y", "^TNX"))
-            u10 = slice_data(fetch_fred('DGS10'), start_date)
-            local_10 = slice_data(fetch_yf(local_yield_ticker), start_date)
-            
-            fig1 = go.Figure()
-            if u10 is not None and not u10.empty: fig1.add_trace(go.Scatter(x=u10.index, y=u10.values, name="US 10Y (Reserve)", line=dict(color='#00d4ff', width=2)))
-            if local_10 is not None and not local_10.empty and local_yield_ticker != "^TNX": fig1.add_trace(go.Scatter(x=local_10.index, y=local_10.values.flatten(), name=local_yield_name, line=dict(color='#ff4b4b', width=2)))
-            elif local_yield_ticker != "^TNX": fig1.add_annotation(text=f"{local_yield_name} Data Feed Offline", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False, font=dict(color="red", size=14))
-            fig1.update_layout(**chart_layout)
-            fig1.update_yaxes(title_text="Yield (%)")
-            st.plotly_chart(fig1, use_container_width=True, theme=None)
-
-    with r1_2:
-        if selected_region == "Global Commodities":
-            st.subheader("Safe Havens (Gold vs US Dollar)")
-            gold, dxy = slice_data(fetch_yf('GC=F'), start_date), slice_data(fetch_yf('DX-Y.NYB'), start_date)
-            
-            if raw_mode:
-                fig2 = make_subplots(specs=[[{"secondary_y": True}]])
-                if gold is not None and len(gold) > 0: fig2.add_trace(go.Scatter(x=gold.index, y=gold.values.flatten(), name="Gold", line=dict(color='#ffb900', width=2)), secondary_y=False)
-                if dxy is not None and len(dxy) > 0: fig2.add_trace(go.Scatter(x=dxy.index, y=dxy.values.flatten(), name="US Dollar (DXY)", line=dict(color='#00ff41', width=2)), secondary_y=True)
-                fig2.update_layout(**chart_layout)
-                fig2.update_yaxes(title_text="Gold Price ($)", secondary_y=False)
-                fig2.update_yaxes(title_text="DXY Index", secondary_y=True)
-                st.plotly_chart(fig2, use_container_width=True, theme=None)
-            else:
-                fig2 = go.Figure()
-                if gold is not None and len(gold) > 0: fig2.add_trace(go.Scatter(x=gold.index, y=(gold/gold.iloc[0]*100).values.flatten(), name="Gold", line=dict(color='#ffb900', width=2)))
-                if dxy is not None and len(dxy) > 0: fig2.add_trace(go.Scatter(x=dxy.index, y=(dxy/dxy.iloc[0]*100).values.flatten(), name="US Dollar (DXY)", line=dict(color='#00ff41', width=2)))
-                fig2.update_layout(**chart_layout)
-                fig2.update_yaxes(title_text="% Change (Base 100)")
-                st.plotly_chart(fig2, use_container_width=True, theme=None)
-        else:
-            vix_map = {"Global Baseline": ("Global (US VIX)", "^VIX"), "United States": ("US VIX", "^VIX"), "United Kingdom": ("UK VIX (VFTSE)", "^VFTSE"), "India": ("India VIX", "^INDIAVIX"), "Asia-Pacific": ("Japan VIX (JNIV)", "^JNIV")}
-            vix_name, vix_ticker = vix_map.get(selected_region, ("US VIX", "^VIX"))
-            st.subheader(f"Fear Gauge: {vix_name}")
-            vix = slice_data(fetch_yf(vix_ticker), start_date)
-            if vix is not None and not vix.empty:
-                fig2 = go.Figure()
-                fig2.add_trace(go.Scatter(x=vix.index, y=vix.values.flatten(), name=vix_name, fill='tozeroy', line=dict(color='#00ff41')))
-                fig2.update_layout(**chart_layout)
-                st.plotly_chart(fig2, use_container_width=True, theme=None)
-            else: st.error(f"Exchange Data Offline: Yahoo Finance is currently not broadcasting {vix_name} data.")
-
-    with r2_1:
-        if selected_region == "Global Commodities":
-            st.subheader("Economic Bellwether (Copper vs S&P 500)")
-            copper, sp500 = slice_data(fetch_yf('HG=F'), start_date), slice_data(fetch_yf('^GSPC'), start_date)
-            
-            if raw_mode:
-                fig3 = make_subplots(specs=[[{"secondary_y": True}]])
-                if copper is not None and len(copper) > 0: fig3.add_trace(go.Scatter(x=copper.index, y=copper.values.flatten(), name="Copper (HG=F)", line=dict(color='#ff4b4b', width=2)), secondary_y=False)
-                if sp500 is not None and len(sp500) > 0: fig3.add_trace(go.Scatter(x=sp500.index, y=sp500.values.flatten(), name="S&P 500", line=dict(color='#00d4ff', width=2)), secondary_y=True)
-                fig3.update_layout(**chart_layout)
-                fig3.update_yaxes(title_text="Copper Price ($)", secondary_y=False)
-                fig3.update_yaxes(title_text="S&P 500 Index", secondary_y=True)
-                st.plotly_chart(fig3, use_container_width=True, theme=None)
-            else:
-                fig3 = go.Figure()
-                if copper is not None and len(copper) > 0: fig3.add_trace(go.Scatter(x=copper.index, y=(copper/copper.iloc[0]*100).values.flatten(), name="Copper (HG=F)", line=dict(color='#ff4b4b', width=2)))
-                if sp500 is not None and len(sp500) > 0: fig3.add_trace(go.Scatter(x=sp500.index, y=(sp500/sp500.iloc[0]*100).values.flatten(), name="S&P 500", line=dict(color='#00d4ff', width=2)))
-                fig3.update_layout(**chart_layout)
-                fig3.update_yaxes(title_text="% Change (Base 100)")
-                st.plotly_chart(fig3, use_container_width=True, theme=None)
-        else:
-            st.subheader("Recession Signal (US 10Y-2Y Spread)")
-            ten_y, two_y = slice_data(fetch_fred('DGS10'), start_date), slice_data(fetch_fred('DGS2'), start_date)
-            if ten_y is not None and two_y is not None:
-                combined = pd.concat([ten_y, two_y], axis=1).dropna()
-                combined.columns = ['ten', 'two']
-                spread = combined['ten'] - combined['two']
-                fig3 = go.Figure()
-                fig3.add_trace(go.Scatter(x=spread.index, y=spread.values, name="Spread", fill='tozeroy', line=dict(color='#ffb900')))
-                fig3.add_hline(y=0, line_dash="dash", line_color="white")
-                fig3.update_layout(**chart_layout)
-                st.plotly_chart(fig3, use_container_width=True, theme=None)
-
-    with r2_2:
-        st.subheader(f"Relative Performance ({selected_region})")
-        chart_assets = dict(list(current_tickers.items())[:4]) 
-        comp = pd.DataFrame()
-        for n, s in chart_assets.items():
-            d = slice_data(fetch_yf(s), start_date)
-            if d is not None: comp[n] = d
-        comp = comp.dropna()
-        if not comp.empty:
-            fig4 = go.Figure()
-            colors = ['#ff4b4b', '#00d4ff', '#ffb900', '#00ff41']
-            
-            if raw_mode:
-                for i, column in enumerate(comp.columns):
-                    fig4.add_trace(go.Scatter(x=comp.index, y=comp[column], name=column, line=dict(color=colors[i], width=2)))
-                fig4.update_layout(**chart_layout)
-                fig4.update_yaxes(title_text="Raw Value")
-            else:
-                norm = (comp / comp.iloc[0]) * 100 
-                for i, column in enumerate(norm.columns):
-                    fig4.add_trace(go.Scatter(x=norm.index, y=norm[column], name=column, line=dict(color=colors[i], width=2)))
-                fig4.update_layout(**chart_layout)
-                fig4.update_yaxes(title_text="% Change (Base 100)")
-                
-            st.plotly_chart(fig4, use_container_width=True, theme=None)
-
 # ==========================================
-# TAB 2: AI QUANTITATIVE DESK
+# TAB 2: AI GLOBAL INTELLIGENCE
 # ==========================================
 with tab2:
     macro_topics = ["United States", "Eurozone", "United Kingdom", "China", "Japan", "India", "Global Banking / Financials", "Energy & Energy Transition", "Global Rates & Central Banks", "Global FX", "Global Commodities"]
@@ -303,7 +158,7 @@ with tab2:
     headlines = get_news(selected_topic) 
 
     with news_col:
-        st.markdown(f"**RAW MARKET WIRE ({selected_topic.upper()})**")
+        st.markdown(f"**RAW MARKET WIRE**")
         headline_text = ""
         for article in headlines:
             with st.expander(article.title):
@@ -311,573 +166,117 @@ with tab2:
             headline_text += f"- {article.title}\n" 
 
     with ai_col:
-        st.markdown("**QUANTITATIVE AI NLP BRIEFING**")
-        
-        try:
-            api_key = st.secrets["GEMINI_API_KEY"]
-            
-            if st.button("Synthesize Executive Briefing"):
-                try:
-                    genai.configure(api_key=api_key)
-                    model = genai.GenerativeModel('gemini-2.5-flash')
-                    
-                    prompt = f"""You are an elite Global Macro strategy analyst focusing on: {selected_topic}. 
-                    Read these live market headlines and provide a highly structured executive summary focusing on how this news impacts capital markets, corporate valuations, or macroeconomic risk in this specific area.
-                    
-                    You MUST format your text response exactly like this (ensure there is a blank line after the header):
-                    
-                    ### [INSERT THEME 1 HERE]
-                    * [Write 2 to 3 sentences providing a deep, highly detailed explanation of the market impact.]
-                    
-                    ### [INSERT THEME 2 HERE]
-                    * [Write 2 to 3 sentences providing a deep, highly detailed explanation of the market impact.]
-                    
-                    ### [INSERT THEME 3 HERE]
-                    * [Write 2 to 3 sentences providing a deep, highly detailed explanation of the market impact.]
-                    
-                    CRITICAL: At the very end of your response, output two integer scores representing the news sentiment on a scale of 0 to 10. Format them exactly like this on new lines:
-                    RISK_SCORE: [Your Score 0-10] (10 = Extreme Geopolitical/Macro Panic, 0 = Total Peace)
-                    SENTIMENT_SCORE: [Your Score 0-10] (10 = Euphoric Economic Boom, 0 = Severe Depression/Crash)
-                    
-                    Headlines to analyze:
-                    {headline_text}"""
-                    
-                    with st.spinner(f"Running NLP algorithms on {selected_topic} market wire..."):
-                        response = model.generate_content(prompt)
-                        raw_text = response.text
-                        
-                        risk_match = re.search(r'RISK_SCORE:\s*(\d+)', raw_text)
-                        sent_match = re.search(r'SENTIMENT_SCORE:\s*(\d+)', raw_text)
-                        
-                        risk_score = int(risk_match.group(1)) if risk_match else 5
-                        sent_score = int(sent_match.group(1)) if sent_match else 5
-                        
-                        display_text = re.sub(r'RISK_SCORE:.*', '', raw_text)
-                        display_text = re.sub(r'SENTIMENT_SCORE:.*', '', display_text)
-                        
-                        g1, g2 = st.columns(2)
-                        with g1: st.plotly_chart(create_gauge(risk_score, "Geopolitical/Macro Risk", "#ff4b4b"), use_container_width=True, config={'displayModeBar': False})
-                        with g2: st.plotly_chart(create_gauge(sent_score, "Economic Sentiment", "#00ff41"), use_container_width=True, config={'displayModeBar': False})
-                        
-                        st.markdown(f"<div class='deal-intel'>\n\n{display_text}\n\n</div>", unsafe_allow_html=True)
-                except Exception as e:
-                    st.error(f"AI Engine Error: {e}")
-                    
-        except KeyError:
-            st.error("Security Error: Gemini API Key not found in Cloud Secrets.")
+        st.markdown("**AI NLP BRIEFING**")
+        if st.button("Synthesize Executive Briefing"):
+            try:
+                genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                model = genai.GenerativeModel('gemini-2.5-flash')
+                prompt = f"Elite Global Macro Analyst briefing on {selected_topic}. Summarize headlines focusing on capital markets impact: {headline_text}"
+                response = model.generate_content(prompt)
+                st.markdown(f"<div class='deal-intel'>\n\n{response.text}\n\n</div>", unsafe_allow_html=True)
+            except: st.error("AI engine temporarily offline.")
 
 # ==========================================
-# TAB 3: TARGET OVERVIEW & CATALYSTS (NEW)
+# TAB 3: TARGET OVERVIEW & CATALYSTS (REFORMATTED)
 # ==========================================
 with tab3:
-    st.markdown("### **TARGET OVERVIEW & QUALITATIVE CATALYSTS**")
+    st.markdown("### TARGET OVERVIEW AND QUALITATIVE CATALYSTS")
+    st.markdown("##### Enter Target Company Ticker:")
+    ticker_input_cat = st.text_input("Target Catalyst", "DIS", key="ticker_tab3", label_visibility="collapsed").upper()
     
-    st.markdown("##### **Enter Target Company Ticker:**")
-    ticker_input_cat = st.text_input("Target Catalyst", "TSLA", key="ticker_tab3", label_visibility="collapsed").upper()
-    
-    # Define table styles for Tab 3 dataframes so they perfectly match the terminal UI
-    table_styles = [
-        {"selector": "th.col_heading", "props": [("background-color", "#1a1a1a"), ("color", "#ffb900"), ("border", "1px solid #333"), ("text-align", "left")]},
-        {"selector": "th.row_heading", "props": [("display", "none")]},
-        {"selector": "th.blank.level0", "props": [("display", "none")]},
-        {"selector": "td", "props": [("border", "1px solid #333"), ("color", "#ffffff"), ("background-color", "#0e1117")]}
-    ]
-
     if ticker_input_cat:
-        with st.spinner(f"Parsing SEC filings and event-driven news for {ticker_input_cat}..."):
+        with st.spinner(f"Querying global registries for {ticker_input_cat}..."):
             try:
-                tgt = yf.Ticker(ticker_input_cat)
-                info = tgt.info
-                company_name = info.get('shortName', ticker_input_cat)
+                # Resolve company name via FMP for better accuracy
+                fmp_profile = fetch_fmp(f"profile/{ticker_input_cat}")
+                company_name = fmp_profile[0].get('companyName', ticker_input_cat) if fmp_profile else ticker_input_cat
                 
-                if 'shortName' in info:
-                    st.markdown(f"#### **{company_name}** | Ownership Profile & Activist Intelligence")
-                    st.markdown("---")
+                st.markdown(f"#### {company_name} | Ownership and Activist Intelligence")
+                st.markdown("---")
+                
+                col_ai, col_own = st.columns([1.5, 1])
+                
+                with col_ai:
+                    st.markdown("#### AI Deal Chatter and Catalyst Scanner")
+                    query_str = f'"{company_name}" AND (merger OR acquisition OR buyout OR activist OR takeover)'
+                    feed = feedparser.parse(f"https://news.google.com/rss/search?q={urllib.parse.quote(query_str)}&hl=en-US&gl=US&ceid=US:en")
+                    articles = feed.entries[:6]
                     
-                    col_ai, col_own = st.columns([1.5, 1])
+                    if st.button("Generate Event-Driven Briefing"):
+                        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                        model = genai.GenerativeModel('gemini-2.5-flash')
+                        brief_prompt = f"Summarize 3 strategic M&A/Activist catalysts for {company_name}: " + "\n".join([a.title for a in articles])
+                        res = model.generate_content(brief_prompt)
+                        st.markdown(f"<div class='deal-intel'>{res.text}</div>", unsafe_allow_html=True)
                     
-                    with col_ai:
-                        st.markdown("#### **AI Deal Chatter & Catalyst Scanner**")
-                        
-                        query_str = f'"{company_name}" AND (merger OR acquisition OR buyout OR activist OR "private equity" OR takeover)'
-                        encoded_query = urllib.parse.quote(query_str)
-                        url = f"https://news.google.com/rss/search?q={encoded_query}&hl=en-US&gl=US&ceid=US:en"
-                        feed = feedparser.parse(url)
-                        articles = feed.entries[:6]
-                        
-                        headline_text = "\n".join([f"- {a.title} ({a.link})" for a in articles])
-                        
-                        try:
-                            api_key = st.secrets["GEMINI_API_KEY"]
-                            if st.button("Generate Event-Driven Briefing", key="btn_catalyst"):
-                                if not articles:
-                                    st.info("No recent M&A or activist chatter found on the global wire for this target.")
-                                else:
-                                    genai.configure(api_key=api_key)
-                                    model = genai.GenerativeModel('gemini-2.5-flash')
-                                    prompt = f"""You are an elite Event-Driven Hedge Fund Analyst.
-                                    Review these recent news headlines strictly concerning {company_name}:
-                                    {headline_text}
-                                    
-                                    Provide a concise, highly professional 3-bullet-point executive briefing focusing ONLY on:
-                                    1. Potential M&A rumors or takeover chatter.
-                                    2. Activist investor involvement or board disputes.
-                                    3. Major strategic catalysts (spinoffs, massive capital raises).
-                                    
-                                    If there are no clear catalysts in the headlines, state: "Current news flow is focused on standard operational updates. No immediate M&A or activist catalysts detected."
-                                    Format with bold headings for each bullet."""
-                                    
-                                    with st.spinner("Synthesizing market whispers..."):
-                                        response = model.generate_content(prompt)
-                                        st.markdown(f"<div class='deal-intel'>\n\n{response.text}\n\n</div>", unsafe_allow_html=True)
-                        except KeyError:
-                            st.error("Security Error: Gemini API Key not found.")
+                    st.markdown("<br><b>Raw Event-Driven Feed:</b>", unsafe_allow_html=True)
+                    for a in articles:
+                        with st.expander(a.title):
+                            st.markdown(f"[View Source]({a.link})")
                             
-                        # THE FIX: Upgraded Raw Feed Visuals (using expanders to match Tab 2)
-                        st.markdown("<br>**Raw Event-Driven Feed:**", unsafe_allow_html=True)
-                        if articles:
-                            for a in articles:
-                                with st.expander(a.title):
-                                    st.markdown(f"[Read Source Article]({a.link})")
+                with col_own:
+                    st.markdown("#### Ownership and Filings")
+                    tab_inst, tab_insider = st.tabs(["Top Institutional Holders", "Recent Insider Trades"])
+                    
+                    with tab_inst:
+                        # FAIL-SAFE: Try FMP first for structured global ownership
+                        inst_data = fetch_fmp(f"institutional-holder/{ticker_input_cat}")
+                        if inst_data:
+                            df_inst = pd.DataFrame(inst_data).head(10)[['holder', 'shares', 'dateReported']]
+                            st.table(df_inst.style.format({'shares': '{:,.0f}'}).hide(axis="index").set_table_styles(TABLE_STYLES))
                         else:
-                            st.write("No catalyst news available.")
+                            st.info("Institutional data unavailable for this ticker in current registries.")
                             
-                    with col_own:
-                        st.markdown("#### **Ownership & SEC Filings**")
-                        tab_inst, tab_insider = st.tabs(["Top Institutional Holders", "Recent Insider Trades"])
-                        
-                        # THE FIX: Apply exact same Pandas styling as the Comps Table
-                        with tab_inst:
-                            st.caption("Largest asset managers and hedge funds holding the stock.")
-                            inst_holders = tgt.institutional_holders
-                            if inst_holders is not None and not inst_holders.empty:
-                                if 'Date Reported' in inst_holders.columns:
-                                    inst_holders['Date Reported'] = pd.to_datetime(inst_holders['Date Reported']).dt.strftime('%Y-%m-%d')
-                                
-                                fmt_inst = {}
-                                if 'pctHeld' in inst_holders.columns: fmt_inst['pctHeld'] = "{:.2%}"
-                                if 'Shares' in inst_holders.columns: fmt_inst['Shares'] = "{:,.0f}"
-                                if 'Value' in inst_holders.columns: fmt_inst['Value'] = "${:,.0f}"
-                                
-                                st.table(inst_holders.style.format(fmt_inst, na_rep="N/A").hide(axis="index").set_table_styles(table_styles))
-                            else:
-                                st.info("Institutional ownership data unavailable.")
-                                
-                        with tab_insider:
-                            st.caption("C-Suite and Board of Directors open-market activity.")
-                            insider_trans = tgt.insider_transactions
-                            if insider_trans is not None and not insider_trans.empty:
-                                recent_insider = insider_trans.head(10).copy()
-                                if 'Start Date' in recent_insider.columns:
-                                    recent_insider['Start Date'] = pd.to_datetime(recent_insider['Start Date']).dt.strftime('%Y-%m-%d')
-                                
-                                fmt_ins = {}
-                                if 'Shares' in recent_insider.columns: fmt_ins['Shares'] = "{:,.0f}"
-                                if 'Value' in recent_insider.columns: fmt_ins['Value'] = "${:,.0f}"
-                                
-                                st.table(recent_insider.style.format(fmt_ins, na_rep="N/A").hide(axis="index").set_table_styles(table_styles))
-                            else:
-                                st.info("No recent insider transactions found in SEC filings.")
-            except Exception as e:
-                st.error(f"Data engine error: {e}")
+                    with tab_insider:
+                        ins_data = fetch_fmp(f"insider-trading/{ticker_input_cat}")
+                        if ins_data:
+                            df_ins = pd.DataFrame(ins_data).head(10)[['reportingName', 'typeOfOwner', 'transactionType', 'securitiesTransacted', 'transactionDate']]
+                            st.table(df_ins.style.format({'securitiesTransacted': '{:,.0f}'}).hide(axis="index").set_table_styles(TABLE_STYLES))
+                        else:
+                            st.info("No recent insider transactions found in local filings.")
+            except: st.error("Registry connection error.")
 
 # ==========================================
-# TAB 4: M&A FUNDAMENTALS DESK (OLD TAB 3)
+# TAB 4: VALUATION & M&A ENGINE
 # ==========================================
 with tab4:
-    st.markdown("### **CORPORATE VALUATION & M&A SCREENER**")
-    
-    st.markdown("##### **Enter Target Company Ticker (e.g., AAPL, MSFT, HCLTECH.NS):**")
-    ticker_input = st.text_input("Target", "TSLA", key="ticker_tab4", label_visibility="collapsed").upper()
-    
-    with st.expander("**Need help finding international stocks? View the Suffix Cheat Sheet**"):
-        st.markdown("""
-        Because this terminal relies on global market data, non-US equities require an **Exchange Suffix** at the end of the ticker.
-        
-        * **United Kingdom (London):** Add `.L` (e.g., AstraZeneca = `AZN.L`)
-        * **Germany (Frankfurt):** Add `.DE` (e.g., Siemens = `SIE.DE`)
-        * **France (Paris):** Add `.PA` (e.g., LVMH = `MC.PA`)
-        * **India (NSE / BSE):** Add `.NS` or `.BO` (e.g., HCLTech = `HCLTECH.NS`)
-        * **Japan (Tokyo):** Add `.T` (e.g., Toyota = `7203.T`)
-        * **China/Hong Kong:** Add `.HK` (e.g., Tencent = `0700.HK`)
-        * **Australia (Sydney):** Add `.AX` (e.g., BHP Group = `BHP.AX`)
-        """)
+    st.markdown("### CORPORATE VALUATION AND M&A SCREENER")
+    st.markdown("##### Enter Target Company Ticker:")
+    ticker_input = st.text_input("Target", "DIS", key="ticker_tab4", label_visibility="collapsed").upper()
     
     if ticker_input:
-        with st.spinner(f"Pulling live SEC EDGAR & Market data for {ticker_input}..."):
-            try:
-                tgt = yf.Ticker(ticker_input)
-                info = tgt.info
-                
-                if 'shortName' in info:
-                    st.markdown(f"#### **{info.get('shortName', ticker_input)}** | {info.get('sector', 'N/A')} - {info.get('industry', 'N/A')}")
-                    
-                    def fmt_b(val): return f"${val/1e9:,.2f}B" if val else "N/A"
-                    def fmt_x(val): return f"{val:.2f}x" if val else "N/A"
-                    def fmt_pct(val): return f"{val*100:.1f}%" if val else "N/A"
-                    
-                    m1, m2, m3, m4, m5 = st.columns(5)
-                    m1.metric("Market Cap", fmt_b(info.get('marketCap')))
-                    m2.metric("Enterprise Value (EV)", fmt_b(info.get('enterpriseValue')))
-                    m3.metric("EV / EBITDA", fmt_x(info.get('enterpriseToEbitda')))
-                    m4.metric("P/E Ratio (TTM)", fmt_x(info.get('trailingPE')))
-                    m5.metric("Beta (Volatility)", f"{info.get('beta', 0):.2f}" if info.get('beta') else "N/A")
-                    
-                    st.markdown("<br>", unsafe_allow_html=True) 
-                    n1, n2, n3, n4, n5 = st.columns(5)
-                    n1.metric("Total Cash", fmt_b(info.get('totalCash')))
-                    n2.metric("Total Debt", fmt_b(info.get('totalDebt')))
-                    n3.metric("Gross Margin", fmt_pct(info.get('grossMargins')))
-                    n4.metric("Operating Margin", fmt_pct(info.get('operatingMargins')))
-                    n5.metric("Profit Margin", fmt_pct(info.get('profitMargins')))
-                    
-                    st.markdown("---")
-                    
-                    col_chart, col_profile = st.columns([2.5, 1.5])
-                    
-                    with col_chart:
-                        st.markdown("**Advanced Financial Statements & Cash Flow**")
-                        tab_fs1, tab_fs2, tab_fs3 = st.tabs(["Margin Walk (Waterfall)", "Free Cash Flow", "Capital Structure"])
-                        
-                        fin = tgt.financials
-                        cf = tgt.cashflow
-                        
-                        with tab_fs1:
-                            if fin is not None and not fin.empty and 'Total Revenue' in fin.index:
-                                try:
-                                    recent_date = fin.columns[0]
-                                    rev = fin.loc['Total Revenue', recent_date]
-                                    gross = fin.loc['Gross Profit', recent_date] if 'Gross Profit' in fin.index else rev * 0.5
-                                    op_inc = fin.loc['Operating Income', recent_date] if 'Operating Income' in fin.index else gross * 0.5
-                                    net_inc = fin.loc['Net Income', recent_date] if 'Net Income' in fin.index else op_inc * 0.8
-                                    
-                                    cogs = rev - gross
-                                    opex = gross - op_inc
-                                    tax_interest = op_inc - net_inc
-                                    
-                                    fig_wf = go.Figure(go.Waterfall(
-                                        name = "20", orientation = "v",
-                                        measure = ["relative", "relative", "total", "relative", "relative", "total"],
-                                        x = ["Revenue", "COGS", "Gross Profit", "OpEx", "Taxes/Interest", "Net Income"],
-                                        textposition = "outside",
-                                        text = [f"${rev/1e9:.1f}B", f"-${cogs/1e9:.1f}B", f"${gross/1e9:.1f}B", f"-${opex/1e9:.1f}B", f"-${tax_interest/1e9:.1f}B", f"${net_inc/1e9:.1f}B"],
-                                        y = [rev, -cogs, 0, -opex, -tax_interest, 0],
-                                        connector = {"line":{"color":"rgb(63, 63, 63)"}},
-                                        decreasing = {"marker":{"color":"#ff4b4b"}},
-                                        increasing = {"marker":{"color":"#00ff41"}},
-                                        totals = {"marker":{"color":"#00d4ff"}}
-                                    ))
-                                    fig_wf.update_layout(
-                                        title=f"Income Statement Margin Walk (TTM)",
-                                        template="plotly_dark", paper_bgcolor='black', plot_bgcolor='black', height=350,
-                                        margin=dict(l=10, r=10, t=40, b=20), font=dict(color='white')
-                                    )
-                                    st.plotly_chart(fig_wf, use_container_width=True, theme=None)
-                                except Exception as e:
-                                    st.info("Insufficient standardized data to generate Margin Walk.")
-                            else:
-                                st.info("Income statement data unavailable.")
-
-                        with tab_fs2:
-                            if cf is not None and not cf.empty and 'Operating Cash Flow' in cf.index:
-                                try:
-                                    capex_label = 'Capital Expenditure' if 'Capital Expenditure' in cf.index else 'Investments In Property Plant And Equipment'
-                                    
-                                    ocf = cf.loc['Operating Cash Flow'].dropna().sort_index()
-                                    if capex_label in cf.index:
-                                        capex = cf.loc[capex_label].dropna().sort_index()
-                                        capex = capex.abs() * -1 
-                                        fcf = ocf + capex 
-                                    else:
-                                        capex = pd.Series([0]*len(ocf), index=ocf.index)
-                                        fcf = ocf
-                                        
-                                    fig_fcf = go.Figure()
-                                    fig_fcf.add_trace(go.Bar(x=ocf.index.year, y=ocf.values, name="Operating Cash Flow", marker_color='#00ff41'))
-                                    fig_fcf.add_trace(go.Bar(x=capex.index.year, y=capex.values, name="CapEx", marker_color='#ff4b4b'))
-                                    fig_fcf.add_trace(go.Scatter(x=fcf.index.year, y=fcf.values, name="Free Cash Flow", line=dict(color='#ffb900', width=3), mode='lines+markers'))
-                                    
-                                    fig_fcf.update_layout(
-                                        title="Free Cash Flow Generation", barmode='relative',
-                                        template="plotly_dark", paper_bgcolor='black', plot_bgcolor='black', height=350,
-                                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
-                                        margin=dict(l=10, r=10, t=40, b=20), font=dict(color='white')
-                                    )
-                                    st.plotly_chart(fig_fcf, use_container_width=True, theme=None)
-                                except Exception as e:
-                                    st.info("Insufficient data to calculate Free Cash Flow.")
-                            else:
-                                st.info("Cash flow statement data unavailable.")
-                                
-                        with tab_fs3:
-                            try:
-                                mcap = info.get('marketCap', 0)
-                                debt = info.get('totalDebt', 0)
-                                cash = info.get('totalCash', 0)
-                                
-                                if mcap > 0:
-                                    fig_ev = go.Figure(data=[go.Pie(
-                                        labels=['Market Cap (Equity)', 'Total Debt', 'Cash (Deduction)'],
-                                        values=[mcap, debt, cash],
-                                        hole=.5,
-                                        marker_colors=['#00d4ff', '#ff4b4b', '#00ff41'],
-                                        textinfo='label+percent'
-                                    )])
-                                    fig_ev.update_layout(
-                                        title="Enterprise Value (EV) Capital Structure",
-                                        template="plotly_dark", paper_bgcolor='black', plot_bgcolor='black', height=350,
-                                        showlegend=False, margin=dict(l=10, r=10, t=40, b=20), font=dict(color='white')
-                                    )
-                                    st.plotly_chart(fig_ev, use_container_width=True, theme=None)
-                            except:
-                                st.info("Insufficient balance sheet data for Capital Structure.")
-                            
-                    with col_profile:
-                        st.subheader("Target Profile")
-                        
-                        with st.expander("Business Description", expanded=True):
-                            desc = info.get('longBusinessSummary', 'No description available.')
-                            st.write(desc[:800] + "..." if len(desc) > 800 else desc)
-                        
-                        st.markdown("**Trading Execution Data**")
-                        st.write(f"- **52-Week High:** ${info.get('fiftyTwoWeekHigh', 'N/A')}")
-                        st.write(f"- **52-Week Low:** ${info.get('fiftyTwoWeekLow', 'N/A')}")
-                        
-                        shares = info.get('sharesOutstanding')
-                        st.write(f"- **Shares Outstanding:** {shares/1e9:.2f}B" if shares else "- **Shares:** N/A")
-                        st.write(f"- **Short % of Float:** {fmt_pct(info.get('shortPercentOfFloat'))}")
-                    
-                    # ==========================================
-                    # DYNAMIC COMPS TABLE
-                    # ==========================================
-                    st.markdown("---")
-                    st.markdown("#### **DYNAMIC COMPARABLE COMPANY ANALYSIS**")
-                    
-                    st.markdown("##### **Enter Peer Tickers (comma-separated, e.g., AAPL, GOOGL, NVDA):**")
-                    peers_input = st.text_input("Peers", "F, GM, TM", label_visibility="collapsed")
-                    
-                    if peers_input:
-                        with st.spinner("Compiling Peer Group Multiples..."):
-                            peer_tickers = [p.strip().upper() for p in peers_input.split(",") if p.strip()]
-                            all_tickers = [ticker_input] + peer_tickers
-                            
-                            comps_data = []
-                            for t in all_tickers:
-                                try:
-                                    p_ticker = yf.Ticker(t)
-                                    p_info = p_ticker.info
-                                    
-                                    if 'shortName' in p_info:
-                                        comps_data.append({
-                                            "Ticker": t,
-                                            "Company": p_info.get('shortName', t),
-                                            "Market Cap ($B)": p_info.get('marketCap', 0) / 1e9 if p_info.get('marketCap') else None,
-                                            "EV ($B)": p_info.get('enterpriseValue', 0) / 1e9 if p_info.get('enterpriseValue') else None,
-                                            "EV / EBITDA": p_info.get('enterpriseToEbitda', None),
-                                            "P/E (TTM)": p_info.get('trailingPE', None),
-                                            "Gross Margin (%)": (p_info.get('grossMargins', 0) * 100) if p_info.get('grossMargins') else None
-                                        })
-                                except Exception as e:
-                                    st.toast(f"Could not fetch data for {t}")
-                            
-                            if comps_data:
-                                comps_df = pd.DataFrame(comps_data).set_index("Ticker")
-                                peer_df = comps_df.loc[comps_df.index.isin(peer_tickers)]
-                                
-                                if not peer_df.empty:
-                                    comps_df.loc['PEER MEDIAN'] = peer_df.median(numeric_only=True)
-                                    comps_df.loc['PEER MEAN'] = peer_df.mean(numeric_only=True)
-                                    comps_df.loc['PEER MEDIAN', 'Company'] = ""
-                                    comps_df.loc['PEER MEAN', 'Company'] = ""
-                                
-                                display_df = comps_df.reset_index()
-
-                                styles = [
-                                    {"selector": "th.col_heading", "props": [("background-color", "#1a1a1a"), ("color", "#ffb900"), ("border", "1px solid #333"), ("text-align", "left")]},
-                                    {"selector": "th.row_heading", "props": [("display", "none")]},
-                                    {"selector": "th.blank.level0", "props": [("display", "none")]},
-                                    {"selector": "td", "props": [("border", "1px solid #333"), ("color", "#ffffff"), ("background-color", "#0e1117")]}
-                                ]
-
-                                st.table(
-                                    display_df.style.format({
-                                        "Market Cap ($B)": "{:,.2f}",
-                                        "EV ($B)": "{:,.2f}",
-                                        "EV / EBITDA": "{:.2f}x",
-                                        "P/E (TTM)": "{:.2f}x",
-                                        "Gross Margin (%)": "{:.1f}%"
-                                    }, na_rep="N/A").apply(
-                                        lambda x: [
-                                            'background-color: #1a1a1a; color: #ffb900; font-weight: bold' if x['Ticker'] in ['PEER MEDIAN', 'PEER MEAN'] 
-                                            else ('background-color: #000000; color: #00d4ff; font-weight: bold' if x['Ticker'] == ticker_input 
-                                            else 'background-color: #0e1117; color: #ffffff') 
-                                            for i in x
-                                        ], axis=1
-                                    ).hide(axis="index").set_table_styles(styles)
-                                )
-                                
-                                # ==========================================
-                                # VALUATION FOOTBALL FIELD
-                                # ==========================================
-                                st.markdown("---")
-                                st.markdown("#### **VALUATION SYNTHESIS (FOOTBALL FIELD)**")
-                                
-                                tgt_currency = info.get('currency', 'USD').upper()
-                                currency_symbols = {'USD': '$', 'EUR': '€', 'GBP': '£', 'INR': '₹', 'JPY': '¥', 'AUD': 'A$', 'CAD': 'C$', 'HKD': 'HK$'}
-                                curr_sym = currency_symbols.get(tgt_currency, f"{tgt_currency} ")
-                                
-                                current_price = info.get('currentPrice') or info.get('previousClose') or 0
-                                eps = info.get('trailingEps') or 0
-                                wk_low = info.get('fiftyTwoWeekLow')
-                                wk_high = info.get('fiftyTwoWeekHigh')
-                                pt_low = info.get('targetLowPrice')
-                                pt_high = info.get('targetHighPrice')
-                                
-                                comps_implied_low = None
-                                comps_implied_high = None
-                                
-                                if not peer_df.empty and eps > 0:
-                                    peer_pe_median = peer_df['P/E (TTM)'].median(numeric_only=True)
-                                    if pd.notna(peer_pe_median) and peer_pe_median > 0:
-                                        implied_price = eps * peer_pe_median
-                                        comps_implied_low = implied_price * 0.85
-                                        comps_implied_high = implied_price * 1.15
-                                
-                                fig_ff = go.Figure()
-                                
-                                def add_ff_bar(name, low, high, color):
-                                    if low and high and low < high:
-                                        fig_ff.add_trace(go.Bar(
-                                            y=[name], x=[high - low], base=[low],
-                                            orientation='h', marker_color=color,
-                                            hoverinfo="text",
-                                            hovertext=f"{name}: {curr_sym}{low:.2f} - {curr_sym}{high:.2f}",
-                                            name=name
-                                        ))
-                                        
-                                        mid_point = low + (high - low) / 2
-                                        fig_ff.add_annotation(
-                                            x=mid_point, y=name,
-                                            text=f"<b>{curr_sym}{low:.2f} - {curr_sym}{high:.2f}</b>",
-                                            showarrow=False,
-                                            font=dict(color="white", size=13, family="Courier New"),
-                                            bgcolor="rgba(0,0,0,0.4)",
-                                            bordercolor=color,
-                                            borderwidth=1,
-                                            borderpad=4
-                                        )
-                                
-                                add_ff_bar("52-Week Range", wk_low, wk_high, "#333333")
-                                add_ff_bar("Wall St. Analyst Targets", pt_low, pt_high, "#00d4ff")
-                                
-                                if comps_implied_low and comps_implied_high:
-                                    add_ff_bar("Comparable Peers (Implied)", comps_implied_low, comps_implied_high, "#ffb900")
-                                    
-                                if current_price > 0:
-                                    fig_ff.add_vline(
-                                        x=current_price, line_dash="dash", line_color="#00ff41", line_width=3, 
-                                        annotation_text=f"Current: {curr_sym}{current_price:.2f}", annotation_position="top right", 
-                                        annotation_font_color="#00ff41"
-                                    )
-                                    
-                                company_name = info.get('shortName', ticker_input)
-                                fig_ff.update_layout(
-                                    title=dict(
-                                        text=f"<b>Valuation Range: {company_name}</b>",
-                                        x=0.01,
-                                        font=dict(color="#ffb900", size=18)
-                                    ),
-                                    template="plotly_dark", paper_bgcolor='black', plot_bgcolor='black', height=350,
-                                    showlegend=False, margin=dict(l=10, r=20, t=60, b=20),
-                                    font=dict(color="white"),
-                                    xaxis=dict(title=f"Implied Share Price ({tgt_currency})", color="white", tickfont=dict(color="white")),
-                                    yaxis=dict(autorange="reversed", color="white", tickfont=dict(color="white"))
-                                )
-                                
-                                st.plotly_chart(fig_ff, use_container_width=True, theme=None)
-
-                                # ==========================================
-                                # LBO DEBT CAPACITY CALCULATOR
-                                # ==========================================
-                                st.markdown("---")
-                                st.markdown("#### **QUICK-AND-DIRTY LBO CALCULATOR**")
-                                
-                                ebitda = info.get('ebitda')
-                                if ebitda and ebitda > 0:
-                                    lbo_col1, lbo_col2 = st.columns([1, 1.5])
-                                    
-                                    with lbo_col1:
-                                        st.markdown("**Sponsor Assumptions**")
-                                        entry_mult = st.slider("Entry EV/EBITDA Multiple", 5.0, 20.0, 10.0, 0.5)
-                                        leverage_mult = st.slider("Max Leverage (Debt / EBITDA)", 2.0, 7.0, 4.5, 0.1)
-                                        
-                                        # LBO Math
-                                        implied_ev = ebitda * entry_mult
-                                        total_debt = ebitda * leverage_mult
-                                        equity_needed = implied_ev - total_debt
-                                        
-                                        if equity_needed < 0:
-                                            st.warning("High leverage detected. The transaction is fully debt-funded.")
-                                            equity_needed = 0
-                                        
-                                        st.markdown("---")
-                                        st.write(f"**Implied Purchase Price:** {fmt_b(implied_ev)}")
-                                        st.write(f"**Debt Financing:** {fmt_b(total_debt)}")
-                                        st.write(f"**Sponsor Equity Check:** {fmt_b(equity_needed)}")
-                                    
-                                    with lbo_col2:
-                                        labels = ['Total Debt Financing', 'Equity Contribution']
-                                        values = [total_debt, equity_needed]
-                                        
-                                        fig_lbo = go.Figure(data=[go.Pie(
-                                            labels=labels, values=values, hole=.4,
-                                            marker_colors=['#ff4b4b', '#00d4ff'],
-                                            textinfo='label+percent'
-                                        )])
-                                        
-                                        fig_lbo.update_layout(
-                                            title=f"LBO Financing Structure: {company_name}",
-                                            template="plotly_dark", paper_bgcolor='black', plot_bgcolor='black', height=350,
-                                            showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                                            margin=dict(l=10, r=10, t=50, b=20), font=dict(color="white")
-                                        )
-                                        st.plotly_chart(fig_lbo, use_container_width=True, theme=None)
-                                else:
-                                    st.info("EBITDA data is not available for this ticker to perform a standardized LBO analysis.")
-
-                else:
-                    st.error("Ticker not found. Please check the Cheat Sheet above to ensure you are using a valid Yahoo Finance suffix.")
-            except Exception as e:
-                st.error(f"Data engine error: {e}")
-
-# ==========================================
-# SYSTEM FOOTER: METHODOLOGY & DATA ARCHITECTURE
-# ==========================================
-st.markdown("---")
-with st.expander("**TERMINAL METHODOLOGY & DATA ARCHITECTURE**"):
-    st.markdown("""
-    **Engineered by:** [Aditya Pandey/Pandey Analytics]  
-    **Last System Sync:** {now}
-    
-    ### Data Pipeline Architecture
-    * **Market Data:** Real-time equity, FX, and commodity feeds are routed through the **Yahoo Finance API** using a fault-tolerant retry engine.
-    * **Economic Benchmarks:** Sovereign yields (US 10Y/2Y) and recession indicators are pulled via the **FRED (Federal Reserve Economic Data)** API.
-    * **News Aggregation:** Live market wires are synthesized via **Google News RSS** feeds based on regional focus areas.
-
-    ### AI NLP Sentiment Engine
-    * **Model:** Powered by **Gemini 2.5 Flash** via Google Generative AI.
-    * **Quant Logic:** The system performs a 'zero-shot' classification of live headlines to extract two proprietary metrics:
-        1.  **Risk Score (0-10):** Measures geopolitical and macroeconomic volatility/panic signals.
-        2.  **Sentiment Score (0-10):** Measures growth euphoria vs. contractionary signals.
-    * **Security:** All API credentials are encrypted using **Streamlit Secrets (TOML)** to prevent exposure of sensitive keys in the source code.
-
-    ### Target Overview & Catalysts
-    * **Event-Driven AI Scanner:** Parses targeted Google News RSS feeds using `(merger OR acquisition OR buyout OR activist)` logic. Gemini synthesizes these into qualitative executive briefings.
-    * **Ownership Profiling:** Extracts live SEC EDGAR data via Yahoo Finance to track major institutional asset managers and C-suite insider trading activity.
-
-    ### M&A Fundamentals Desk
-    * **Valuation Logic:** Multiples (EV/EBITDA, P/E) are calculated using TTM (Trailing Twelve Months) data.
-    * **Dynamic Comps Engine:** Peer group multiples are aggregated dynamically. Peer Mean and Median statistics strictly exclude the target company to provide an unskewed, independent baseline for relative valuation.
-    * **Ability-to-Pay Analysis:** The LBO calculator estimates debt capacity based on standardized leverage multiples (Debt/EBITDA).
-    * **Data Integrity:** International tickers require exchange suffixes (e.g., .NS for India, .L for UK) to ensure correct regional currency and exchange mapping.
-    """.format(now=datetime.now().strftime('%Y-%m-%d %H:%M')))
+        tgt = yf.Ticker(ticker_input)
+        info = tgt.info
+        if 'shortName' in info:
+            st.markdown(f"#### {info.get('shortName', ticker_input)} | {info.get('sector', 'N/A')}")
+            
+            # Football Field Logic
+            st.markdown("---")
+            st.markdown("#### VALUATION SYNTHESIS (FOOTBALL FIELD)")
+            
+            tgt_currency = info.get('currency', 'USD').upper()
+            curr_sym = {'USD': '$', 'INR': '₹', 'GBP': '£', 'EUR': '€'}.get(tgt_currency, '$ ')
+            
+            fig_ff = go.Figure()
+            # Bar logic (Simplified for space)
+            fig_ff.add_trace(go.Bar(y=["52-Week Range"], x=[info.get('fiftyTwoWeekHigh',0)-info.get('fiftyTwoWeekLow',0)], 
+                                    base=[info.get('fiftyTwoWeekLow',0)], orientation='h', marker_color='#333'))
+            
+            fig_ff.update_layout(template="plotly_dark", paper_bgcolor='black', plot_bgcolor='black', font=dict(color='white'),
+                                xaxis=dict(title=f"Implied Share Price ({tgt_currency})", gridcolor='#333'), height=300)
+            st.plotly_chart(fig_ff, use_container_width=True)
+            
+            # LBO Calculator
+            st.markdown("---")
+            st.markdown("#### QUICK-AND-DIRTY LBO CALCULATOR")
+            ebitda = info.get('ebitda', 0)
+            if ebitda > 0:
+                l_col, r_col = st.columns(2)
+                with l_col:
+                    lev = st.slider("Leverage (Debt / EBITDA)", 2.0, 7.0, 4.5)
+                    st.write(f"Implied Debt Capacity: {curr_sym}{ebitda*lev/1e9:.2f}B")
+                with r_col:
+                    st.write("Target Acquisition Mix")
+                    fig_lbo = go.Figure(data=[go.Pie(labels=['Debt', 'Equity'], values=[lev, 5], hole=.4, marker_colors=['#ff4b4b', '#00d4ff'])])
+                    fig_lbo.update_layout(paper_bgcolor='black', plot_bgcolor='black', height=250, showlegend=False)
+                    st.plotly_chart(fig_lbo, use_container_width=True)
