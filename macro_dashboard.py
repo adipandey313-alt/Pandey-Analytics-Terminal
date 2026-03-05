@@ -600,10 +600,12 @@ with tab3:
                                 # Fix 2: Reset the index so the 'Ticker' column gets the exact same color treatment as the data
                                 display_df = comps_df.reset_index()
 
-                                # Format the DataFrame for Streamlit display
+                                # Specific CSS selectors to split column headers from row headers
                                 styles = [
-                                    {"selector": "th", "props": [("background-color", "#1a1a1a"), ("color", "#ffb900"), ("border", "1px solid #333"), ("text-align", "left")]},
-                                    {"selector": "td", "props": [("border", "1px solid #333")]}
+                                    {"selector": "th.col_heading", "props": [("background-color", "#1a1a1a"), ("color", "#cccccc"), ("border", "1px solid #333"), ("text-align", "left")]},
+                                    {"selector": "th.row_heading", "props": [("display", "none")]},
+                                    {"selector": "th.blank.level0", "props": [("display", "none")]},
+                                    {"selector": "td", "props": [("border", "1px solid #333"), ("color", "#ffffff")]}
                                 ]
 
                                 st.table(
