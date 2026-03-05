@@ -101,12 +101,12 @@ st.title("MACRO & MARKETS TERMINAL")
 st.write(f"SYSTEM STATUS: ONLINE | HYBRID DATA PIPELINE | {datetime.now().strftime('%Y-%m-%d')}")
 st.markdown("---")
 
-# 4. TABS (NOW 4 TABS)
+# 4. TABS
 tab1, tab2, tab3, tab4 = st.tabs([
-    "📊 Macro Data & Indices", 
-    "📰 AI Global Intelligence", 
-    "🎯 Target Overview & Catalysts", 
-    "📈 Valuation & M&A Engine"
+    "Macro Data & Indices", 
+    "AI Global Intelligence", 
+    "Target Overview & Catalysts", 
+    "Valuation & M&A Engine"
 ])
 
 # ==========================================
@@ -123,11 +123,11 @@ with tab1:
     }
     
     ctrl1, ctrl2, ctrl3 = st.columns([2, 1, 1])
-    with ctrl1: selected_region = st.selectbox("🌎 Select Market Workspace:", list(market_regions.keys()))
-    with ctrl2: selected_tf = st.selectbox("⏱️ Select Timeframe:", ["1M", "3M", "6M", "YTD", "1Y", "2Y"], index=3)
+    with ctrl1: selected_region = st.selectbox("Select Market Workspace:", list(market_regions.keys()))
+    with ctrl2: selected_tf = st.selectbox("Select Timeframe:", ["1M", "3M", "6M", "YTD", "1Y", "2Y"], index=3)
     with ctrl3: 
         st.markdown("<br>", unsafe_allow_html=True) 
-        raw_mode = st.toggle("🔢 Show Raw Prices")
+        raw_mode = st.toggle("Show Raw Prices")
 
     now = datetime.now()
     tf_dates = {
@@ -232,7 +232,7 @@ with tab1:
                 fig2.add_trace(go.Scatter(x=vix.index, y=vix.values.flatten(), name=vix_name, fill='tozeroy', line=dict(color='#00ff41')))
                 fig2.update_layout(**chart_layout)
                 st.plotly_chart(fig2, use_container_width=True, theme=None)
-            else: st.error(f"⚠️ Exchange Data Offline: Yahoo Finance is currently not broadcasting {vix_name} data.")
+            else: st.error(f"Exchange Data Offline: Yahoo Finance is currently not broadcasting {vix_name} data.")
 
     with r2_1:
         if selected_region == "Global Commodities":
@@ -298,7 +298,7 @@ with tab1:
 # ==========================================
 with tab2:
     macro_topics = ["United States", "Eurozone", "United Kingdom", "China", "Japan", "India", "Global Banking / Financials", "Energy & Energy Transition", "Global Rates & Central Banks", "Global FX", "Global Commodities"]
-    selected_topic = st.selectbox("🌍 Macro Focus Area:", macro_topics)
+    selected_topic = st.selectbox("Macro Focus Area:", macro_topics)
     news_col, ai_col = st.columns([1, 1.5])
     headlines = get_news(selected_topic) 
 
@@ -307,7 +307,7 @@ with tab2:
         headline_text = ""
         for article in headlines:
             with st.expander(article.title):
-                st.markdown(f"🔗 [Read Source Article]({article.link})")
+                st.markdown(f"[Read Source Article]({article.link})")
             headline_text += f"- {article.title}\n" 
 
     with ai_col:
@@ -364,17 +364,25 @@ with tab2:
                     st.error(f"AI Engine Error: {e}")
                     
         except KeyError:
-            st.error("🔒 Security Error: Gemini API Key not found in Cloud Secrets.")
+            st.error("Security Error: Gemini API Key not found in Cloud Secrets.")
 
 # ==========================================
 # TAB 3: TARGET OVERVIEW & CATALYSTS (NEW)
 # ==========================================
 with tab3:
-    st.markdown("### 🎯 **TARGET OVERVIEW & QUALITATIVE CATALYSTS**")
+    st.markdown("### **TARGET OVERVIEW & QUALITATIVE CATALYSTS**")
     
     st.markdown("##### **Enter Target Company Ticker:**")
     ticker_input_cat = st.text_input("Target Catalyst", "TSLA", key="ticker_tab3", label_visibility="collapsed").upper()
     
+    # Define table styles for Tab 3 dataframes so they perfectly match the terminal UI
+    table_styles = [
+        {"selector": "th.col_heading", "props": [("background-color", "#1a1a1a"), ("color", "#ffb900"), ("border", "1px solid #333"), ("text-align", "left")]},
+        {"selector": "th.row_heading", "props": [("display", "none")]},
+        {"selector": "th.blank.level0", "props": [("display", "none")]},
+        {"selector": "td", "props": [("border", "1px solid #333"), ("color", "#ffffff"), ("background-color", "#0e1117")]}
+    ]
+
     if ticker_input_cat:
         with st.spinner(f"Parsing SEC filings and event-driven news for {ticker_input_cat}..."):
             try:
@@ -389,9 +397,8 @@ with tab3:
                     col_ai, col_own = st.columns([1.5, 1])
                     
                     with col_ai:
-                        st.markdown("#### 🤖 **AI Deal Chatter & Catalyst Scanner**")
+                        st.markdown("#### **AI Deal Chatter & Catalyst Scanner**")
                         
-                        # Fetch highly specific company news (M&A, Activist, Buyout focus)
                         query_str = f'"{company_name}" AND (merger OR acquisition OR buyout OR activist OR "private equity" OR takeover)'
                         encoded_query = urllib.parse.quote(query_str)
                         url = f"https://news.google.com/rss/search?q={encoded_query}&hl=en-US&gl=US&ceid=US:en"
@@ -424,27 +431,35 @@ with tab3:
                                         response = model.generate_content(prompt)
                                         st.markdown(f"<div class='deal-intel'>\n\n{response.text}\n\n</div>", unsafe_allow_html=True)
                         except KeyError:
-                            st.error("🔒 Security Error: Gemini API Key not found.")
+                            st.error("Security Error: Gemini API Key not found.")
                             
+                        # THE FIX: Upgraded Raw Feed Visuals (using expanders to match Tab 2)
                         st.markdown("<br>**Raw Event-Driven Feed:**", unsafe_allow_html=True)
                         if articles:
                             for a in articles:
-                                st.write(f"🔗 [{a.title}]({a.link})")
+                                with st.expander(a.title):
+                                    st.markdown(f"[Read Source Article]({a.link})")
                         else:
                             st.write("No catalyst news available.")
                             
                     with col_own:
-                        st.markdown("#### 🏛️ **Ownership & SEC Filings**")
+                        st.markdown("#### **Ownership & SEC Filings**")
                         tab_inst, tab_insider = st.tabs(["Top Institutional Holders", "Recent Insider Trades"])
                         
+                        # THE FIX: Apply exact same Pandas styling as the Comps Table
                         with tab_inst:
                             st.caption("Largest asset managers and hedge funds holding the stock.")
                             inst_holders = tgt.institutional_holders
                             if inst_holders is not None and not inst_holders.empty:
-                                # Clean up dates if available to look professional
                                 if 'Date Reported' in inst_holders.columns:
                                     inst_holders['Date Reported'] = pd.to_datetime(inst_holders['Date Reported']).dt.strftime('%Y-%m-%d')
-                                st.dataframe(inst_holders, use_container_width=True, hide_index=True)
+                                
+                                fmt_inst = {}
+                                if 'pctHeld' in inst_holders.columns: fmt_inst['pctHeld'] = "{:.2%}"
+                                if 'Shares' in inst_holders.columns: fmt_inst['Shares'] = "{:,.0f}"
+                                if 'Value' in inst_holders.columns: fmt_inst['Value'] = "${:,.0f}"
+                                
+                                st.table(inst_holders.style.format(fmt_inst, na_rep="N/A").hide(axis="index").set_table_styles(table_styles))
                             else:
                                 st.info("Institutional ownership data unavailable.")
                                 
@@ -452,9 +467,15 @@ with tab3:
                             st.caption("C-Suite and Board of Directors open-market activity.")
                             insider_trans = tgt.insider_transactions
                             if insider_trans is not None and not insider_trans.empty:
-                                # Show the 10 most recent trades
-                                recent_insider = insider_trans.head(10)
-                                st.dataframe(recent_insider, use_container_width=True, hide_index=True)
+                                recent_insider = insider_trans.head(10).copy()
+                                if 'Start Date' in recent_insider.columns:
+                                    recent_insider['Start Date'] = pd.to_datetime(recent_insider['Start Date']).dt.strftime('%Y-%m-%d')
+                                
+                                fmt_ins = {}
+                                if 'Shares' in recent_insider.columns: fmt_ins['Shares'] = "{:,.0f}"
+                                if 'Value' in recent_insider.columns: fmt_ins['Value'] = "${:,.0f}"
+                                
+                                st.table(recent_insider.style.format(fmt_ins, na_rep="N/A").hide(axis="index").set_table_styles(table_styles))
                             else:
                                 st.info("No recent insider transactions found in SEC filings.")
             except Exception as e:
@@ -464,22 +485,22 @@ with tab3:
 # TAB 4: M&A FUNDAMENTALS DESK (OLD TAB 3)
 # ==========================================
 with tab4:
-    st.markdown("### 🏢 **CORPORATE VALUATION & M&A SCREENER**")
+    st.markdown("### **CORPORATE VALUATION & M&A SCREENER**")
     
     st.markdown("##### **Enter Target Company Ticker (e.g., AAPL, MSFT, HCLTECH.NS):**")
     ticker_input = st.text_input("Target", "TSLA", key="ticker_tab4", label_visibility="collapsed").upper()
     
-    with st.expander("🌍 **Need help finding international stocks? View the Suffix Cheat Sheet**"):
+    with st.expander("**Need help finding international stocks? View the Suffix Cheat Sheet**"):
         st.markdown("""
         Because this terminal relies on global market data, non-US equities require an **Exchange Suffix** at the end of the ticker.
         
-        * **🇬🇧 United Kingdom (London):** Add `.L` (e.g., AstraZeneca = `AZN.L`)
-        * **🇩🇪 Germany (Frankfurt):** Add `.DE` (e.g., Siemens = `SIE.DE`)
-        * **🇫🇷 France (Paris):** Add `.PA` (e.g., LVMH = `MC.PA`)
-        * **🇮🇳 India (NSE / BSE):** Add `.NS` or `.BO` (e.g., HCLTech = `HCLTECH.NS`)
-        * **🇯🇵 Japan (Tokyo):** Add `.T` (e.g., Toyota = `7203.T`)
-        * **🇭🇰 China/Hong Kong:** Add `.HK` (e.g., Tencent = `0700.HK`)
-        * **🇦🇺 Australia (Sydney):** Add `.AX` (e.g., BHP Group = `BHP.AX`)
+        * **United Kingdom (London):** Add `.L` (e.g., AstraZeneca = `AZN.L`)
+        * **Germany (Frankfurt):** Add `.DE` (e.g., Siemens = `SIE.DE`)
+        * **France (Paris):** Add `.PA` (e.g., LVMH = `MC.PA`)
+        * **India (NSE / BSE):** Add `.NS` or `.BO` (e.g., HCLTech = `HCLTECH.NS`)
+        * **Japan (Tokyo):** Add `.T` (e.g., Toyota = `7203.T`)
+        * **China/Hong Kong:** Add `.HK` (e.g., Tencent = `0700.HK`)
+        * **Australia (Sydney):** Add `.AX` (e.g., BHP Group = `BHP.AX`)
         """)
     
     if ticker_input:
@@ -516,7 +537,7 @@ with tab4:
                     
                     with col_chart:
                         st.markdown("**Advanced Financial Statements & Cash Flow**")
-                        tab_fs1, tab_fs2, tab_fs3 = st.tabs(["📉 Margin Walk (Waterfall)", "💵 Free Cash Flow", "🏗️ Capital Structure"])
+                        tab_fs1, tab_fs2, tab_fs3 = st.tabs(["Margin Walk (Waterfall)", "Free Cash Flow", "Capital Structure"])
                         
                         fin = tgt.financials
                         cf = tgt.cashflow
@@ -675,7 +696,7 @@ with tab4:
                                     {"selector": "th.col_heading", "props": [("background-color", "#1a1a1a"), ("color", "#ffb900"), ("border", "1px solid #333"), ("text-align", "left")]},
                                     {"selector": "th.row_heading", "props": [("display", "none")]},
                                     {"selector": "th.blank.level0", "props": [("display", "none")]},
-                                    {"selector": "td", "props": [("border", "1px solid #333"), ("color", "#ffffff")]}
+                                    {"selector": "td", "props": [("border", "1px solid #333"), ("color", "#ffffff"), ("background-color", "#0e1117")]}
                                 ]
 
                                 st.table(
@@ -696,12 +717,11 @@ with tab4:
                                 )
                                 
                                 # ==========================================
-                                # VALUATION FOOTBALL FIELD (CURRENCY FIX)
+                                # VALUATION FOOTBALL FIELD
                                 # ==========================================
                                 st.markdown("---")
                                 st.markdown("#### **VALUATION SYNTHESIS (FOOTBALL FIELD)**")
                                 
-                                # Dynamic Currency Mapping
                                 tgt_currency = info.get('currency', 'USD').upper()
                                 currency_symbols = {'USD': '$', 'EUR': '€', 'GBP': '£', 'INR': '₹', 'JPY': '¥', 'AUD': 'A$', 'CAD': 'C$', 'HKD': 'HK$'}
                                 curr_sym = currency_symbols.get(tgt_currency, f"{tgt_currency} ")
@@ -797,7 +817,7 @@ with tab4:
                                         equity_needed = implied_ev - total_debt
                                         
                                         if equity_needed < 0:
-                                            st.warning("⚠️ High leverage detected. The transaction is fully debt-funded.")
+                                            st.warning("High leverage detected. The transaction is fully debt-funded.")
                                             equity_needed = 0
                                         
                                         st.markdown("---")
@@ -834,7 +854,7 @@ with tab4:
 # SYSTEM FOOTER: METHODOLOGY & DATA ARCHITECTURE
 # ==========================================
 st.markdown("---")
-with st.expander("🛠️ **TERMINAL METHODOLOGY & DATA ARCHITECTURE**"):
+with st.expander("**TERMINAL METHODOLOGY & DATA ARCHITECTURE**"):
     st.markdown("""
     **Engineered by:** [Aditya Pandey/Pandey Analytics]  
     **Last System Sync:** {now}
