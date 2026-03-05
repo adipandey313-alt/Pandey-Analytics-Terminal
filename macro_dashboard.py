@@ -15,7 +15,7 @@ st.set_page_config(page_title="Macro & Markets Terminal", layout="wide")
 
 st.markdown("""
     <style>
-    .stApp { background-color: #000000; color: #FFFFFF; }
+    [data-testid="stWidgetLabel"] p, .stTextInput label p { color: #FFFFFF !important; font-size: 15px !important; }
     h1, h2, h3, h4 { color: #ffb900 !important; font-family: 'Courier New', monospace; }
     [data-testid="stMetricLabel"] { font-size: 16px !important; color: #FFFFFF !important; font-weight: 800 !important; text-transform: uppercase; }
     [data-testid="stMetricValue"] { font-size: 32px !important; color: #00ff41 !important; }
