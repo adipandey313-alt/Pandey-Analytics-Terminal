@@ -641,3 +641,4 @@ with st.expander("🛠️ **TERMINAL METHODOLOGY & DATA ARCHITECTURE**"):
     * **Valuation Logic:** Multiples (EV/EBITDA, P/E) are calculated using TTM (Trailing Twelve Months) data.
     * **Dynamic Comps Engine:** Peer group multiples are aggregated dynamically. Peer Mean and Median statistics strictly exclude the target company to provide an unskewed, independent baseline for relative valuation.
     * **Data Integrity:** International tickers require exchange suffixes (e.g., .NS for India, .L for UK) to ensure correct regional currency and exchange mapping. Fault-tolerance is built-in to bypass invalid peer tickers without breaking the model.
+    """.format(now=datetime.now().strftime('%Y-%m-%d %H:%M')))
