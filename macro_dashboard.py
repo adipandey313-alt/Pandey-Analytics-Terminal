@@ -601,8 +601,9 @@ with tab3:
                                 display_df = comps_df.reset_index()
 
                                 # Specific CSS selectors to split column headers from row headers
+                                # Specific CSS selectors to split column headers from row headers
                                 styles = [
-                                    {"selector": "th.col_heading", "props": [("background-color", "#1a1a1a"), ("color", "#cccccc"), ("border", "1px solid #333"), ("text-align", "left")]},
+                                    {"selector": "th.col_heading", "props": [("background-color", "#1a1a1a"), ("color", "#ffb900"), ("border", "1px solid #333"), ("text-align", "left")]},
                                     {"selector": "th.row_heading", "props": [("display", "none")]},
                                     {"selector": "th.blank.level0", "props": [("display", "none")]},
                                     {"selector": "td", "props": [("border", "1px solid #333"), ("color", "#ffffff")]}
