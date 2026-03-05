@@ -599,7 +599,14 @@ with tab3:
                                 
                                 # Format the DataFrame for Streamlit display
                                 # Format the DataFrame for Streamlit display
-                                st.dataframe(
+                                # Format the DataFrame for Streamlit display
+                                styles = [
+                                    {"selector": "th.col_heading", "props": [("background-color", "#1a1a1a"), ("color", "#ffb900"), ("border", "1px solid #333")]},
+                                    {"selector": "th.row_heading", "props": [("background-color", "#1a1a1a"), ("color", "#cccccc"), ("border", "1px solid #333")]},
+                                    {"selector": "td", "props": [("border", "1px solid #333")]}
+                                ]
+
+                                st.table(
                                     comps_df.style.format({
                                         "Market Cap ($B)": "{:,.2f}",
                                         "EV ($B)": "{:,.2f}",
@@ -613,9 +620,8 @@ with tab3:
                                             else 'background-color: #0e1117; color: #cccccc') 
                                             for i in x
                                         ], axis=1
-                                    ),
-                                    use_container_width=True
-                                )  
+                                    ).set_table_styles(styles)
+                                ) 
                 else:
                     st.error("Ticker not found. Please check the Cheat Sheet above to ensure you are using a valid Yahoo Finance suffix.")
             except Exception as e:
