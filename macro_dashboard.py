@@ -598,7 +598,71 @@ with tab3:
                                         ], axis=1
                                     ).hide(axis="index").set_table_styles(styles)
                                 )
+                                # ==========================================
+                                # NEW FEATURE: VALUATION FOOTBALL FIELD
+                                # ==========================================
+                                st.markdown("---")
+                                st.markdown("#### **VALUATION SYNTHESIS (FOOTBALL FIELD)**")
                                 
+                                # 1. Extract base metrics safely
+                                current_price = info.get('currentPrice') or info.get('previousClose') or 0
+                                eps = info.get('trailingEps') or 0
+                                
+                                wk_low = info.get('fiftyTwoWeekLow')
+                                wk_high = info.get('fiftyTwoWeekHigh')
+                                
+                                pt_low = info.get('targetLowPrice')
+                                pt_high = info.get('targetHighPrice')
+                                
+                                comps_implied_low = None
+                                comps_implied_high = None
+                                
+                                # 2. Calculate Comps Implied Share Price
+                                # We take the target's EPS and multiply it by the Peer Median P/E
+                                if not peer_df.empty and eps > 0:
+                                    # We use the raw median from the peer set, ignoring the target
+                                    peer_pe_median = peer_df['P/E (TTM)'].median(numeric_only=True)
+                                    if pd.notna(peer_pe_median) and peer_pe_median > 0:
+                                        implied_price = eps * peer_pe_median
+                                        # Create a standard +/- 15% valuation spread for the chart
+                                        comps_implied_low = implied_price * 0.85
+                                        comps_implied_high = implied_price * 1.15
+                                
+                                # 3. Build the Plotly Figure
+                                fig_ff = go.Figure()
+                                
+                                def add_ff_bar(name, low, high, color):
+                                    if low and high and low < high:
+                                        fig_ff.add_trace(go.Bar(
+                                            y=[name], x=[high - low], base=[low],
+                                            orientation='h', marker_color=color,
+                                            text=[f"${low:.2f} - ${high:.2f}"], textposition='inside', insidetextanchor='middle',
+                                            textfont=dict(color="black" if color == "#ffb900" else "white", weight="bold"),
+                                            name=name
+                                        ))
+                                
+                                # Add the horizontal ranges
+                                add_ff_bar("52-Week Range", wk_low, wk_high, "#333333")
+                                add_ff_bar("Wall St. Analyst Targets", pt_low, pt_high, "#00d4ff")
+                                
+                                if comps_implied_low and comps_implied_high:
+                                    add_ff_bar("Comparable Peers (Implied)", comps_implied_low, comps_implied_high, "#ffb900")
+                                    
+                                # Add a vertical line for the Current Trading Price
+                                if current_price > 0:
+                                    fig_ff.add_vline(
+                                        x=current_price, line_dash="dash", line_color="#00ff41", line_width=3, 
+                                        annotation_text=f"Current: ${current_price:.2f}", annotation_position="top right", 
+                                        annotation_font_color="#00ff41"
+                                    )
+                                    
+                                fig_ff.update_layout(
+                                    template="plotly_dark", paper_bgcolor='black', plot_bgcolor='black', height=300,
+                                    showlegend=False, margin=dict(l=10, r=20, t=40, b=20),
+                                    xaxis_title="Implied Share Price (USD)", yaxis=dict(autorange="reversed")
+                                )
+                                
+                                st.plotly_chart(fig_ff, use_container_width=True, theme=None)
                 else:
                     st.error("Ticker not found. Please check the Cheat Sheet above to ensure you are using a valid Yahoo Finance suffix.")
             except Exception as e:
