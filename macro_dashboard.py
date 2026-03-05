@@ -79,7 +79,6 @@ def slice_data(df, start_date):
     if df is None or df.empty: return df
     return df.loc[start_date:]
 
-# NEW HELPER: Gauge Chart Generator
 def create_gauge(score, title, color):
     fig = go.Figure(go.Indicator(
         mode = "gauge+number", value = score,
@@ -102,7 +101,7 @@ st.title("MACRO & MARKETS TERMINAL")
 st.write(f"SYSTEM STATUS: ONLINE | HYBRID DATA PIPELINE | {datetime.now().strftime('%Y-%m-%d')}")
 st.markdown("---")
 
-# 4. TABS (NOW 3 TABS)
+# 4. TABS
 tab1, tab2, tab3 = st.tabs(["📊 Macro Data & Indices", "📰 AI Global Intelligence", "📈 M&A Fundamentals Desk"])
 
 # ==========================================
@@ -368,7 +367,6 @@ with tab2:
 with tab3:
     st.markdown("### 🏢 **CORPORATE VALUATION & M&A SCREENER**")
     
-    # NEW FIX: Native Markdown Label + Collapsed Input Label
     st.markdown("##### **Enter Target Company Ticker (e.g., AAPL, MSFT, HCLTECH.NS):**")
     ticker_input = st.text_input("Target", "TSLA", label_visibility="collapsed").upper()
     
@@ -530,12 +528,11 @@ with tab3:
                         st.write(f"- **Short % of Float:** {fmt_pct(info.get('shortPercentOfFloat'))}")
                     
                     # ==========================================
-                    # NEW FEATURE: DYNAMIC COMPS TABLE
+                    # DYNAMIC COMPS TABLE
                     # ==========================================
                     st.markdown("---")
                     st.markdown("#### **DYNAMIC COMPARABLE COMPANY ANALYSIS**")
                     
-                    # NEW FIX: Native Markdown Label + Collapsed Input Label
                     st.markdown("##### **Enter Peer Tickers (comma-separated, e.g., AAPL, GOOGL, NVDA):**")
                     peers_input = st.text_input("Peers", "F, GM, TM", label_visibility="collapsed")
                     
@@ -598,61 +595,62 @@ with tab3:
                                         ], axis=1
                                     ).hide(axis="index").set_table_styles(styles)
                                 )
+                                
                                 # ==========================================
-                                # NEW FEATURE: VALUATION FOOTBALL FIELD
+                                # VALUATION FOOTBALL FIELD (BULLETPROOF FIX)
                                 # ==========================================
                                 st.markdown("---")
                                 st.markdown("#### **VALUATION SYNTHESIS (FOOTBALL FIELD)**")
                                 
-                                # 1. Extract base metrics safely
                                 current_price = info.get('currentPrice') or info.get('previousClose') or 0
                                 eps = info.get('trailingEps') or 0
-                                
                                 wk_low = info.get('fiftyTwoWeekLow')
                                 wk_high = info.get('fiftyTwoWeekHigh')
-                                
                                 pt_low = info.get('targetLowPrice')
                                 pt_high = info.get('targetHighPrice')
                                 
                                 comps_implied_low = None
                                 comps_implied_high = None
                                 
-                                # 2. Calculate Comps Implied Share Price
-                                # We take the target's EPS and multiply it by the Peer Median P/E
                                 if not peer_df.empty and eps > 0:
-                                    # We use the raw median from the peer set, ignoring the target
                                     peer_pe_median = peer_df['P/E (TTM)'].median(numeric_only=True)
                                     if pd.notna(peer_pe_median) and peer_pe_median > 0:
                                         implied_price = eps * peer_pe_median
-                                        # Create a standard +/- 15% valuation spread for the chart
                                         comps_implied_low = implied_price * 0.85
                                         comps_implied_high = implied_price * 1.15
                                 
-                                # 3. Build the Plotly Figure
                                 fig_ff = go.Figure()
                                 
                                 def add_ff_bar(name, low, high, color):
                                     if low and high and low < high:
+                                        # 1. Draw the bar (Without any native Plotly text)
                                         fig_ff.add_trace(go.Bar(
                                             y=[name], x=[high - low], base=[low],
                                             orientation='h', marker_color=color,
-                                            text=[f"${low:.2f} - ${high:.2f}"], 
-                                            textposition='inside', 
-                                            insidetextanchor='middle',
-                                            textangle=0,          # FIX 1: Force text to always remain horizontal
-                                            constraintext='none', # FIX 2: Allow text to overflow small bars without shrinking/rotating
-                                            textfont=dict(color="black" if color == "#ffb900" else "white", weight="bold", size=12),
+                                            hoverinfo="text",
+                                            hovertext=f"{name}: ${low:.2f} - ${high:.2f}",
                                             name=name
                                         ))
+                                        
+                                        # 2. Overlay a bulletproof custom annotation so it never clips/rotates
+                                        mid_point = low + (high - low) / 2
+                                        fig_ff.add_annotation(
+                                            x=mid_point, y=name,
+                                            text=f"<b>${low:.2f} - ${high:.2f}</b>",
+                                            showarrow=False,
+                                            font=dict(color="white", size=13, family="Courier New"),
+                                            bgcolor="rgba(0,0,0,0.4)", # Subtle dark backing ensures contrast anywhere
+                                            bordercolor=color,         # Matches the bar's color for a sleek UI frame
+                                            borderwidth=1,
+                                            borderpad=4
+                                        )
                                 
-                                # Add the horizontal ranges
                                 add_ff_bar("52-Week Range", wk_low, wk_high, "#333333")
                                 add_ff_bar("Wall St. Analyst Targets", pt_low, pt_high, "#00d4ff")
                                 
                                 if comps_implied_low and comps_implied_high:
                                     add_ff_bar("Comparable Peers (Implied)", comps_implied_low, comps_implied_high, "#ffb900")
                                     
-                                # Add a vertical line for the Current Trading Price
                                 if current_price > 0:
                                     fig_ff.add_vline(
                                         x=current_price, line_dash="dash", line_color="#00ff41", line_width=3, 
