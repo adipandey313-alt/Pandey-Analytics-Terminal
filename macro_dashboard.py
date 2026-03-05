@@ -15,8 +15,8 @@ st.set_page_config(page_title="Macro & Markets Terminal", layout="wide")
 
 st.markdown("""
     <style>
-    [data-testid="stWidgetLabel"] p, .stTextInput label p { color: #FFFFFF !important; font-size: 15px !important; }
-    h1, h2, h3, h4 { color: #ffb900 !important; font-family: 'Courier New', monospace; }
+    .stApp { background-color: #000000; color: #FFFFFF; }
+    h1, h2, h3, h4, h5 { color: #ffb900 !important; font-family: 'Courier New', monospace; }
     [data-testid="stMetricLabel"] { font-size: 16px !important; color: #FFFFFF !important; font-weight: 800 !important; text-transform: uppercase; }
     [data-testid="stMetricValue"] { font-size: 32px !important; color: #00ff41 !important; }
     .deal-intel { background-color: #1a1a1a; padding: 20px; border-left: 5px solid #ffb900; font-size: 16px; margin-top: 20px; }
@@ -118,7 +118,6 @@ with tab1:
         "Global Commodities": {'WTI Crude': 'CL=F', 'Brent Crude': 'BZ=F', 'Copper': 'HG=F', 'Gold': 'GC=F', 'Natural Gas': 'NG=F', 'Silver': 'SI=F'}
     }
     
-    # NEW: Added ctrl3 for the Raw Mode Toggle
     ctrl1, ctrl2, ctrl3 = st.columns([2, 1, 1])
     with ctrl1: selected_region = st.selectbox("🌎 Select Market Workspace:", list(market_regions.keys()))
     with ctrl2: selected_tf = st.selectbox("⏱️ Select Timeframe:", ["1M", "3M", "6M", "YTD", "1Y", "2Y"], index=3)
@@ -150,7 +149,6 @@ with tab1:
     r1_1, r1_2 = st.columns(2)
     r2_1, r2_2 = st.columns(2)
     
-    # NEW: Chart Layout now includes Interactive X-Axis menus
     chart_layout = dict(
         template="plotly_dark", paper_bgcolor='black', plot_bgcolor='black', height=420, hovermode="x unified", 
         legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="left", x=0), 
@@ -205,7 +203,6 @@ with tab1:
             st.subheader("Safe Havens (Gold vs US Dollar)")
             gold, dxy = slice_data(fetch_yf('GC=F'), start_date), slice_data(fetch_yf('DX-Y.NYB'), start_date)
             
-            # NEW: Dual-Axis logic for Raw Mode
             if raw_mode:
                 fig2 = make_subplots(specs=[[{"secondary_y": True}]])
                 if gold is not None and len(gold) > 0: fig2.add_trace(go.Scatter(x=gold.index, y=gold.values.flatten(), name="Gold", line=dict(color='#ffb900', width=2)), secondary_y=False)
@@ -238,7 +235,6 @@ with tab1:
             st.subheader("Economic Bellwether (Copper vs S&P 500)")
             copper, sp500 = slice_data(fetch_yf('HG=F'), start_date), slice_data(fetch_yf('^GSPC'), start_date)
             
-            # NEW: Dual-Axis logic for Raw Mode
             if raw_mode:
                 fig3 = make_subplots(specs=[[{"secondary_y": True}]])
                 if copper is not None and len(copper) > 0: fig3.add_trace(go.Scatter(x=copper.index, y=copper.values.flatten(), name="Copper (HG=F)", line=dict(color='#ff4b4b', width=2)), secondary_y=False)
@@ -279,7 +275,6 @@ with tab1:
             fig4 = go.Figure()
             colors = ['#ff4b4b', '#00d4ff', '#ffb900', '#00ff41']
             
-            # NEW: Toggle between raw values and Base 100 percentages
             if raw_mode:
                 for i, column in enumerate(comp.columns):
                     fig4.add_trace(go.Scatter(x=comp.index, y=comp[column], name=column, line=dict(color=colors[i], width=2)))
@@ -314,11 +309,9 @@ with tab2:
     with ai_col:
         st.markdown("**QUANTITATIVE AI NLP BRIEFING**")
         
-        # Pull the key securely from the Streamlit Cloud backend
         try:
             api_key = st.secrets["GEMINI_API_KEY"]
             
-            # The button is now always visible and clickable
             if st.button("Synthesize Executive Briefing"):
                 try:
                     genai.configure(api_key=api_key)
@@ -367,7 +360,6 @@ with tab2:
                     st.error(f"AI Engine Error: {e}")
                     
         except KeyError:
-            # This triggers if you forgot to save the key in Streamlit Settings -> Secrets
             st.error("🔒 Security Error: Gemini API Key not found in Cloud Secrets.")
 
 # ==========================================
@@ -376,10 +368,10 @@ with tab2:
 with tab3:
     st.markdown("### 🏢 **CORPORATE VALUATION & M&A SCREENER**")
     
-    # Updated the placeholder text to hint at international tickers
-    ticker_input = st.text_input("Enter Target Company Ticker (e.g., AAPL, MSFT, HCLTECH.NS):", "TSLA").upper()
+    # NEW FIX: Native Markdown Label + Collapsed Input Label
+    st.markdown("##### **Enter Target Company Ticker (e.g., AAPL, MSFT, HCLTECH.NS):**")
+    ticker_input = st.text_input("Target", "TSLA", label_visibility="collapsed").upper()
     
-    # NEW: The International Ticker Cheat Sheet Expander
     with st.expander("🌍 **Need help finding international stocks? View the Suffix Cheat Sheet**"):
         st.markdown("""
         Because this terminal relies on global market data, non-US equities require an **Exchange Suffix** at the end of the ticker.
@@ -402,12 +394,10 @@ with tab3:
                 if 'shortName' in info:
                     st.markdown(f"#### **{info.get('shortName', ticker_input)}** | {info.get('sector', 'N/A')} - {info.get('industry', 'N/A')}")
                     
-                    # Formatters
                     def fmt_b(val): return f"${val/1e9:,.2f}B" if val else "N/A"
                     def fmt_x(val): return f"{val:.2f}x" if val else "N/A"
                     def fmt_pct(val): return f"{val*100:.1f}%" if val else "N/A"
                     
-                    # ROW 1: Core Valuation
                     m1, m2, m3, m4, m5 = st.columns(5)
                     m1.metric("Market Cap", fmt_b(info.get('marketCap')))
                     m2.metric("Enterprise Value (EV)", fmt_b(info.get('enterpriseValue')))
@@ -415,7 +405,6 @@ with tab3:
                     m4.metric("P/E Ratio (TTM)", fmt_x(info.get('trailingPE')))
                     m5.metric("Beta (Volatility)", f"{info.get('beta', 0):.2f}" if info.get('beta') else "N/A")
                     
-                    # ROW 2: Liquidity & Margins
                     st.markdown("<br>", unsafe_allow_html=True) 
                     n1, n2, n3, n4, n5 = st.columns(5)
                     n1.metric("Total Cash", fmt_b(info.get('totalCash')))
@@ -435,18 +424,15 @@ with tab3:
                         fin = tgt.financials
                         cf = tgt.cashflow
                         
-                        # CHART 1: THE MARGIN WALK (WATERFALL)
                         with tab_fs1:
                             if fin is not None and not fin.empty and 'Total Revenue' in fin.index:
                                 try:
-                                    # Get the most recent year's data
                                     recent_date = fin.columns[0]
                                     rev = fin.loc['Total Revenue', recent_date]
                                     gross = fin.loc['Gross Profit', recent_date] if 'Gross Profit' in fin.index else rev * 0.5
                                     op_inc = fin.loc['Operating Income', recent_date] if 'Operating Income' in fin.index else gross * 0.5
                                     net_inc = fin.loc['Net Income', recent_date] if 'Net Income' in fin.index else op_inc * 0.8
                                     
-                                    # Calculate the steps
                                     cogs = rev - gross
                                     opex = gross - op_inc
                                     tax_interest = op_inc - net_inc
@@ -474,19 +460,16 @@ with tab3:
                             else:
                                 st.info("Income statement data unavailable.")
 
-                        # CHART 2: FREE CASH FLOW
                         with tab_fs2:
                             if cf is not None and not cf.empty and 'Operating Cash Flow' in cf.index:
                                 try:
-                                    # YFinance sometimes labels CapEx differently
                                     capex_label = 'Capital Expenditure' if 'Capital Expenditure' in cf.index else 'Investments In Property Plant And Equipment'
                                     
                                     ocf = cf.loc['Operating Cash Flow'].dropna().sort_index()
                                     if capex_label in cf.index:
                                         capex = cf.loc[capex_label].dropna().sort_index()
-                                        # CapEx is usually reported as negative, ensure it's absolute for the chart calculation
                                         capex = capex.abs() * -1 
-                                        fcf = ocf + capex # Since capex is negative, adding it subtracts it
+                                        fcf = ocf + capex 
                                     else:
                                         capex = pd.Series([0]*len(ocf), index=ocf.index)
                                         fcf = ocf
@@ -508,7 +491,6 @@ with tab3:
                             else:
                                 st.info("Cash flow statement data unavailable.")
                                 
-                        # CHART 3: CAPITAL STRUCTURE (EV BUILDUP)
                         with tab_fs3:
                             try:
                                 mcap = info.get('marketCap', 0)
@@ -546,20 +528,21 @@ with tab3:
                         shares = info.get('sharesOutstanding')
                         st.write(f"- **Shares Outstanding:** {shares/1e9:.2f}B" if shares else "- **Shares:** N/A")
                         st.write(f"- **Short % of Float:** {fmt_pct(info.get('shortPercentOfFloat'))}")
+                    
                     # ==========================================
                     # NEW FEATURE: DYNAMIC COMPS TABLE
                     # ==========================================
                     st.markdown("---")
                     st.markdown("#### **DYNAMIC COMPARABLE COMPANY ANALYSIS**")
                     
-                    # Provide a smart default based on the target (Optional: you can hardcode defaults or leave it blank)
-                    peers_input = st.text_input("Enter Peer Tickers (comma-separated, e.g., AAPL, GOOGL, NVDA):", "F, GM, TM")
+                    # NEW FIX: Native Markdown Label + Collapsed Input Label
+                    st.markdown("##### **Enter Peer Tickers (comma-separated, e.g., AAPL, GOOGL, NVDA):**")
+                    peers_input = st.text_input("Peers", "F, GM, TM", label_visibility="collapsed")
                     
                     if peers_input:
                         with st.spinner("Compiling Peer Group Multiples..."):
-                            # Clean up the user input
                             peer_tickers = [p.strip().upper() for p in peers_input.split(",") if p.strip()]
-                            all_tickers = [ticker_input] + peer_tickers # Target at the top
+                            all_tickers = [ticker_input] + peer_tickers
                             
                             comps_data = []
                             for t in all_tickers:
@@ -567,7 +550,6 @@ with tab3:
                                     p_ticker = yf.Ticker(t)
                                     p_info = p_ticker.info
                                     
-                                    # Only add if we actually pulled valid data
                                     if 'shortName' in p_info:
                                         comps_data.append({
                                             "Ticker": t,
@@ -579,29 +561,20 @@ with tab3:
                                             "Gross Margin (%)": (p_info.get('grossMargins', 0) * 100) if p_info.get('grossMargins') else None
                                         })
                                 except Exception as e:
-                                    # Fault tolerance: If one peer fails, don't crash the whole table
                                     st.toast(f"Could not fetch data for {t}")
                             
                             if comps_data:
                                 comps_df = pd.DataFrame(comps_data).set_index("Ticker")
-                                
-                                # Separate the target from the peers to calculate accurate peer medians/means
                                 peer_df = comps_df.loc[comps_df.index.isin(peer_tickers)]
                                 
                                 if not peer_df.empty:
-                                    # Calculate summary statistics (ignoring the target company)
                                     comps_df.loc['PEER MEDIAN'] = peer_df.median(numeric_only=True)
                                     comps_df.loc['PEER MEAN'] = peer_df.mean(numeric_only=True)
-                                    
-                                    # Fix 1: Use an empty string so Streamlit doesn't render a Markdown bullet point
                                     comps_df.loc['PEER MEDIAN', 'Company'] = ""
                                     comps_df.loc['PEER MEAN', 'Company'] = ""
                                 
-                                # Fix 2: Reset the index so the 'Ticker' column gets the exact same color treatment as the data
                                 display_df = comps_df.reset_index()
 
-                                # Specific CSS selectors to split column headers from row headers
-                                # Specific CSS selectors to split column headers from row headers
                                 styles = [
                                     {"selector": "th.col_heading", "props": [("background-color", "#1a1a1a"), ("color", "#ffb900"), ("border", "1px solid #333"), ("text-align", "left")]},
                                     {"selector": "th.row_heading", "props": [("display", "none")]},
@@ -625,12 +598,12 @@ with tab3:
                                         ], axis=1
                                     ).hide(axis="index").set_table_styles(styles)
                                 )
-
                                 
                 else:
                     st.error("Ticker not found. Please check the Cheat Sheet above to ensure you are using a valid Yahoo Finance suffix.")
             except Exception as e:
                 st.error(f"Data engine error: {e}")
+
 # ==========================================
 # SYSTEM FOOTER: METHODOLOGY & DATA ARCHITECTURE
 # ==========================================
