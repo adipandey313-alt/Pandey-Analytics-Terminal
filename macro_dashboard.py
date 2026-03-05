@@ -597,10 +597,15 @@ with tab3:
                                 )
                                 
                                 # ==========================================
-                                # VALUATION FOOTBALL FIELD
+                                # VALUATION FOOTBALL FIELD (CURRENCY FIX)
                                 # ==========================================
                                 st.markdown("---")
                                 st.markdown("#### **VALUATION SYNTHESIS (FOOTBALL FIELD)**")
+                                
+                                # Dynamic Currency Mapping
+                                tgt_currency = info.get('currency', 'USD').upper()
+                                currency_symbols = {'USD': '$', 'EUR': '€', 'GBP': '£', 'INR': '₹', 'JPY': '¥', 'AUD': 'A$', 'CAD': 'C$', 'HKD': 'HK$'}
+                                curr_sym = currency_symbols.get(tgt_currency, f"{tgt_currency} ")
                                 
                                 current_price = info.get('currentPrice') or info.get('previousClose') or 0
                                 eps = info.get('trailingEps') or 0
@@ -627,14 +632,14 @@ with tab3:
                                             y=[name], x=[high - low], base=[low],
                                             orientation='h', marker_color=color,
                                             hoverinfo="text",
-                                            hovertext=f"{name}: ${low:.2f} - ${high:.2f}",
+                                            hovertext=f"{name}: {curr_sym}{low:.2f} - {curr_sym}{high:.2f}",
                                             name=name
                                         ))
                                         
                                         mid_point = low + (high - low) / 2
                                         fig_ff.add_annotation(
                                             x=mid_point, y=name,
-                                            text=f"<b>${low:.2f} - ${high:.2f}</b>",
+                                            text=f"<b>{curr_sym}{low:.2f} - {curr_sym}{high:.2f}</b>",
                                             showarrow=False,
                                             font=dict(color="white", size=13, family="Courier New"),
                                             bgcolor="rgba(0,0,0,0.4)",
@@ -652,7 +657,7 @@ with tab3:
                                 if current_price > 0:
                                     fig_ff.add_vline(
                                         x=current_price, line_dash="dash", line_color="#00ff41", line_width=3, 
-                                        annotation_text=f"Current: ${current_price:.2f}", annotation_position="top right", 
+                                        annotation_text=f"Current: {curr_sym}{current_price:.2f}", annotation_position="top right", 
                                         annotation_font_color="#00ff41"
                                     )
                                     
@@ -666,7 +671,7 @@ with tab3:
                                     template="plotly_dark", paper_bgcolor='black', plot_bgcolor='black', height=350,
                                     showlegend=False, margin=dict(l=10, r=20, t=60, b=20),
                                     font=dict(color="white"),
-                                    xaxis=dict(title="Implied Share Price (USD)", color="white", tickfont=dict(color="white")),
+                                    xaxis=dict(title=f"Implied Share Price ({tgt_currency})", color="white", tickfont=dict(color="white")),
                                     yaxis=dict(autorange="reversed", color="white", tickfont=dict(color="white"))
                                 )
                                 
