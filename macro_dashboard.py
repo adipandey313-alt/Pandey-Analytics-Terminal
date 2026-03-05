@@ -623,7 +623,6 @@ with tab3:
                                 
                                 def add_ff_bar(name, low, high, color):
                                     if low and high and low < high:
-                                        # 1. Draw the bar (Without any native Plotly text)
                                         fig_ff.add_trace(go.Bar(
                                             y=[name], x=[high - low], base=[low],
                                             orientation='h', marker_color=color,
@@ -632,15 +631,14 @@ with tab3:
                                             name=name
                                         ))
                                         
-                                        # 2. Overlay a bulletproof custom annotation so it never clips/rotates
                                         mid_point = low + (high - low) / 2
                                         fig_ff.add_annotation(
                                             x=mid_point, y=name,
                                             text=f"<b>${low:.2f} - ${high:.2f}</b>",
                                             showarrow=False,
                                             font=dict(color="white", size=13, family="Courier New"),
-                                            bgcolor="rgba(0,0,0,0.4)", # Subtle dark backing ensures contrast anywhere
-                                            bordercolor=color,         # Matches the bar's color for a sleek UI frame
+                                            bgcolor="rgba(0,0,0,0.4)",
+                                            bordercolor=color,
                                             borderwidth=1,
                                             borderpad=4
                                         )
@@ -658,10 +656,13 @@ with tab3:
                                         annotation_font_color="#00ff41"
                                     )
                                     
+                                # THE FIX: Explicitly forcing White font and axis text colors
                                 fig_ff.update_layout(
                                     template="plotly_dark", paper_bgcolor='black', plot_bgcolor='black', height=300,
                                     showlegend=False, margin=dict(l=10, r=20, t=40, b=20),
-                                    xaxis_title="Implied Share Price (USD)", yaxis=dict(autorange="reversed")
+                                    font=dict(color="white"),
+                                    xaxis=dict(title="Implied Share Price (USD)", color="white", tickfont=dict(color="white")),
+                                    yaxis=dict(autorange="reversed", color="white", tickfont=dict(color="white"))
                                 )
                                 
                                 st.plotly_chart(fig_ff, use_container_width=True, theme=None)
