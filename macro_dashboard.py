@@ -546,7 +546,72 @@ with tab3:
                         shares = info.get('sharesOutstanding')
                         st.write(f"- **Shares Outstanding:** {shares/1e9:.2f}B" if shares else "- **Shares:** N/A")
                         st.write(f"- **Short % of Float:** {fmt_pct(info.get('shortPercentOfFloat'))}")
-                        
+                    # ==========================================
+                    # NEW FEATURE: DYNAMIC COMPS TABLE
+                    # ==========================================
+                    st.markdown("---")
+                    st.subheader("📊 Dynamic Comparable Company Analysis")
+                    
+                    # Provide a smart default based on the target (Optional: you can hardcode defaults or leave it blank)
+                    peers_input = st.text_input("Enter Peer Tickers (comma-separated, e.g., AAPL, GOOGL, NVDA):", "F, GM, TM")
+                    
+                    if peers_input:
+                        with st.spinner("Compiling Peer Group Multiples..."):
+                            # Clean up the user input
+                            peer_tickers = [p.strip().upper() for p in peers_input.split(",") if p.strip()]
+                            all_tickers = [ticker_input] + peer_tickers # Target at the top
+                            
+                            comps_data = []
+                            for t in all_tickers:
+                                try:
+                                    p_ticker = yf.Ticker(t)
+                                    p_info = p_ticker.info
+                                    
+                                    # Only add if we actually pulled valid data
+                                    if 'shortName' in p_info:
+                                        comps_data.append({
+                                            "Ticker": t,
+                                            "Company": p_info.get('shortName', t),
+                                            "Market Cap ($B)": p_info.get('marketCap', 0) / 1e9 if p_info.get('marketCap') else None,
+                                            "EV ($B)": p_info.get('enterpriseValue', 0) / 1e9 if p_info.get('enterpriseValue') else None,
+                                            "EV / EBITDA": p_info.get('enterpriseToEbitda', None),
+                                            "P/E (TTM)": p_info.get('trailingPE', None),
+                                            "Gross Margin (%)": (p_info.get('grossMargins', 0) * 100) if p_info.get('grossMargins') else None
+                                        })
+                                except Exception as e:
+                                    # Fault tolerance: If one peer fails, don't crash the whole table
+                                    st.toast(f"Could not fetch data for {t}")
+                            
+                            if comps_data:
+                                comps_df = pd.DataFrame(comps_data).set_index("Ticker")
+                                
+                                # Separate the target from the peers to calculate accurate peer medians/means
+                                peer_df = comps_df.loc[comps_df.index.isin(peer_tickers)]
+                                
+                                if not peer_df.empty:
+                                    # Calculate summary statistics (ignoring the target company)
+                                    comps_df.loc['PEER MEDIAN'] = peer_df.median(numeric_only=True)
+                                    comps_df.loc['PEER MEAN'] = peer_df.mean(numeric_only=True)
+                                    
+                                    # Fill NA strings for aesthetic purposes on the stat rows
+                                    comps_df.loc['PEER MEDIAN', 'Company'] = "-"
+                                    comps_df.loc['PEER MEAN', 'Company'] = "-"
+                                
+                                # Format the DataFrame for Streamlit display
+                                st.dataframe(
+                                    comps_df.style.format({
+                                        "Market Cap ($B)": "{:,.2f}",
+                                        "EV ($B)": "{:,.2f}",
+                                        "EV / EBITDA": "{:.2f}x",
+                                        "P/E (TTM)": "{:.2f}x",
+                                        "Gross Margin (%)": "{:.1f}%"
+                                    }, na_rep="N/A").apply(
+                                        lambda x: ['background-color: #1a1a1a; color: #ffb900; font-weight: bold' if x.name in ['PEER MEDIAN', 'PEER MEAN'] 
+                                                   else ('background-color: #0e1117; color: #00d4ff; font-weight: bold' if x.name == ticker_input else '') 
+                                                   for i in x], axis=1
+                                    ),
+                                    use_container_width=True
+                                )   
                 else:
                     st.error("Ticker not found. Please check the Cheat Sheet above to ensure you are using a valid Yahoo Finance suffix.")
             except Exception as e:
