@@ -657,9 +657,20 @@ with tab3:
                                     )
                                     
                                 # THE FIX: Explicitly forcing White font and axis text colors
+                                # THE FIX: Dynamic Title + White font and axis text colors
+                                company_name = info.get('shortName', ticker_input)
                                 fig_ff.update_layout(
-                                    template="plotly_dark", paper_bgcolor='black', plot_bgcolor='black', height=300,
-                                    showlegend=False, margin=dict(l=10, r=20, t=40, b=20),
+                                    title=dict(
+                                        text=f"<b>Valuation Range: {company_name}</b>",
+                                        x=0.01,
+                                        font=dict(color="#ffb900", size=18)
+                                    ),
+                                    template="plotly_dark", 
+                                    paper_bgcolor='black', 
+                                    plot_bgcolor='black', 
+                                    height=350,
+                                    showlegend=False, 
+                                    margin=dict(l=10, r=20, t=60, b=20),
                                     font=dict(color="white"),
                                     xaxis=dict(title="Implied Share Price (USD)", color="white", tickfont=dict(color="white")),
                                     yaxis=dict(autorange="reversed", color="white", tickfont=dict(color="white"))
