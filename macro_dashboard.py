@@ -593,18 +593,35 @@ with tab3:
                                     comps_df.loc['PEER MEDIAN'] = peer_df.median(numeric_only=True)
                                     comps_df.loc['PEER MEAN'] = peer_df.mean(numeric_only=True)
                                     
-                                    # Fill NA strings for aesthetic purposes on the stat rows
-                                    comps_df.loc['PEER MEDIAN', 'Company'] = "-"
-                                    comps_df.loc['PEER MEAN', 'Company'] = "-"
+                                    # Fix 1: Use an empty string so Streamlit doesn't render a Markdown bullet point
+                                    comps_df.loc['PEER MEDIAN', 'Company'] = ""
+                                    comps_df.loc['PEER MEAN', 'Company'] = ""
                                 
-                                # Format the DataFrame for Streamlit display
-                                # Format the DataFrame for Streamlit display
+                                # Fix 2: Reset the index so the 'Ticker' column gets the exact same color treatment as the data
+                                display_df = comps_df.reset_index()
+
                                 # Format the DataFrame for Streamlit display
                                 styles = [
-                                    {"selector": "th.col_heading", "props": [("background-color", "#1a1a1a"), ("color", "#ffb900"), ("border", "1px solid #333")]},
-                                    {"selector": "th.row_heading", "props": [("background-color", "#1a1a1a"), ("color", "#cccccc"), ("border", "1px solid #333")]},
+                                    {"selector": "th", "props": [("background-color", "#1a1a1a"), ("color", "#ffb900"), ("border", "1px solid #333"), ("text-align", "left")]},
                                     {"selector": "td", "props": [("border", "1px solid #333")]}
                                 ]
+
+                                st.table(
+                                    display_df.style.format({
+                                        "Market Cap ($B)": "{:,.2f}",
+                                        "EV ($B)": "{:,.2f}",
+                                        "EV / EBITDA": "{:.2f}x",
+                                        "P/E (TTM)": "{:.2f}x",
+                                        "Gross Margin (%)": "{:.1f}%"
+                                    }, na_rep="N/A").apply(
+                                        lambda x: [
+                                            'background-color: #1a1a1a; color: #ffb900; font-weight: bold' if x['Ticker'] in ['PEER MEDIAN', 'PEER MEAN'] 
+                                            else ('background-color: #000000; color: #00d4ff; font-weight: bold' if x['Ticker'] == ticker_input 
+                                            else 'background-color: #0e1117; color: #ffffff') 
+                                            for i in x
+                                        ], axis=1
+                                    ).hide(axis="index").set_table_styles(styles)
+                                )
 
                                 st.table(
                                     comps_df.style.format({
