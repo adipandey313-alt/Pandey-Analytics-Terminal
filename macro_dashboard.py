@@ -623,22 +623,7 @@ with tab3:
                                     ).hide(axis="index").set_table_styles(styles)
                                 )
 
-                                st.table(
-                                    comps_df.style.format({
-                                        "Market Cap ($B)": "{:,.2f}",
-                                        "EV ($B)": "{:,.2f}",
-                                        "EV / EBITDA": "{:.2f}x",
-                                        "P/E (TTM)": "{:.2f}x",
-                                        "Gross Margin (%)": "{:.1f}%"
-                                    }, na_rep="N/A").apply(
-                                        lambda x: [
-                                            'background-color: #1a1a1a; color: #ffb900; font-weight: bold' if x.name in ['PEER MEDIAN', 'PEER MEAN'] 
-                                            else ('background-color: #000000; color: #00d4ff; font-weight: bold' if x.name == ticker_input 
-                                            else 'background-color: #0e1117; color: #cccccc') 
-                                            for i in x
-                                        ], axis=1
-                                    ).set_table_styles(styles)
-                                ) 
+                                
                 else:
                     st.error("Ticker not found. Please check the Cheat Sheet above to ensure you are using a valid Yahoo Finance suffix.")
             except Exception as e:
