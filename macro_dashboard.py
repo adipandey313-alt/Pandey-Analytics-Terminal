@@ -362,7 +362,7 @@ with tab2:
             st.error("🔒 Security Error: Gemini API Key not found in Cloud Secrets.")
 
 # ==========================================
-# TAB 3: M&A FUNDAMENTALS DESK (NEW)
+# TAB 3: M&A FUNDAMENTALS DESK
 # ==========================================
 with tab3:
     st.markdown("### 🏢 **CORPORATE VALUATION & M&A SCREENER**")
@@ -597,7 +597,7 @@ with tab3:
                                 )
                                 
                                 # ==========================================
-                                # VALUATION FOOTBALL FIELD (BULLETPROOF FIX)
+                                # VALUATION FOOTBALL FIELD
                                 # ==========================================
                                 st.markdown("---")
                                 st.markdown("#### **VALUATION SYNTHESIS (FOOTBALL FIELD)**")
@@ -656,8 +656,6 @@ with tab3:
                                         annotation_font_color="#00ff41"
                                     )
                                     
-                                # THE FIX: Explicitly forcing White font and axis text colors
-                                # THE FIX: Dynamic Title + White font and axis text colors
                                 company_name = info.get('shortName', ticker_input)
                                 fig_ff.update_layout(
                                     title=dict(
@@ -665,18 +663,66 @@ with tab3:
                                         x=0.01,
                                         font=dict(color="#ffb900", size=18)
                                     ),
-                                    template="plotly_dark", 
-                                    paper_bgcolor='black', 
-                                    plot_bgcolor='black', 
-                                    height=350,
-                                    showlegend=False, 
-                                    margin=dict(l=10, r=20, t=60, b=20),
+                                    template="plotly_dark", paper_bgcolor='black', plot_bgcolor='black', height=350,
+                                    showlegend=False, margin=dict(l=10, r=20, t=60, b=20),
                                     font=dict(color="white"),
                                     xaxis=dict(title="Implied Share Price (USD)", color="white", tickfont=dict(color="white")),
                                     yaxis=dict(autorange="reversed", color="white", tickfont=dict(color="white"))
                                 )
                                 
                                 st.plotly_chart(fig_ff, use_container_width=True, theme=None)
+
+                                # ==========================================
+                                # NEW FEATURE: LBO DEBT CAPACITY CALCULATOR
+                                # ==========================================
+                                st.markdown("---")
+                                st.markdown("#### **QUICK-AND-DIRTY LBO CALCULATOR**")
+                                
+                                ebitda = info.get('ebitda')
+                                if ebitda and ebitda > 0:
+                                    lbo_col1, lbo_col2 = st.columns([1, 1.5])
+                                    
+                                    with lbo_col1:
+                                        st.markdown("**Sponsor Assumptions**")
+                                        entry_mult = st.slider("Entry EV/EBITDA Multiple", 5.0, 20.0, 10.0, 0.5)
+                                        leverage_mult = st.slider("Max Leverage (Debt / EBITDA)", 2.0, 7.0, 4.5, 0.1)
+                                        
+                                        # LBO Math
+                                        implied_ev = ebitda * entry_mult
+                                        total_debt = ebitda * leverage_mult
+                                        equity_needed = implied_ev - total_debt
+                                        
+                                        # Validation
+                                        if equity_needed < 0:
+                                            st.warning("⚠️ High leverage detected. The transaction is fully debt-funded.")
+                                            equity_needed = 0
+                                        
+                                        st.markdown("---")
+                                        st.write(f"**Implied Purchase Price:** {fmt_b(implied_ev)}")
+                                        st.write(f"**Debt Financing:** {fmt_b(total_debt)}")
+                                        st.write(f"**Sponsor Equity Check:** {fmt_b(equity_needed)}")
+                                    
+                                    with lbo_col2:
+                                        # Visualization: Financing Mix
+                                        labels = ['Total Debt Financing', 'Equity Contribution']
+                                        values = [total_debt, equity_needed]
+                                        
+                                        fig_lbo = go.Figure(data=[go.Pie(
+                                            labels=labels, values=values, hole=.4,
+                                            marker_colors=['#ff4b4b', '#00d4ff'],
+                                            textinfo='label+percent'
+                                        )])
+                                        
+                                        fig_lbo.update_layout(
+                                            title=f"LBO Financing Structure: {company_name}",
+                                            template="plotly_dark", paper_bgcolor='black', plot_bgcolor='black', height=350,
+                                            showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                                            margin=dict(l=10, r=10, t=50, b=20), font=dict(color="white")
+                                        )
+                                        st.plotly_chart(fig_lbo, use_container_width=True, theme=None)
+                                else:
+                                    st.info("EBITDA data is not available for this ticker to perform a standardized LBO analysis.")
+
                 else:
                     st.error("Ticker not found. Please check the Cheat Sheet above to ensure you are using a valid Yahoo Finance suffix.")
             except Exception as e:
@@ -706,5 +752,6 @@ with st.expander("🛠️ **TERMINAL METHODOLOGY & DATA ARCHITECTURE**"):
     ### M&A Fundamentals Desk
     * **Valuation Logic:** Multiples (EV/EBITDA, P/E) are calculated using TTM (Trailing Twelve Months) data.
     * **Dynamic Comps Engine:** Peer group multiples are aggregated dynamically. Peer Mean and Median statistics strictly exclude the target company to provide an unskewed, independent baseline for relative valuation.
-    * **Data Integrity:** International tickers require exchange suffixes (e.g., .NS for India, .L for UK) to ensure correct regional currency and exchange mapping. Fault-tolerance is built-in to bypass invalid peer tickers without breaking the model.
+    * **Ability-to-Pay Analysis:** The LBO calculator estimates debt capacity based on standardized leverage multiples (Debt/EBITDA).
+    * **Data Integrity:** International tickers require exchange suffixes (e.g., .NS for India, .L for UK) to ensure correct regional currency and exchange mapping.
     """.format(now=datetime.now().strftime('%Y-%m-%d %H:%M')))
