@@ -51,8 +51,15 @@ def fetch_fmp(endpoint, params={}):
         base_url = f"https://financialmodelingprep.com/api/v3/{endpoint}"
         params["apikey"] = api_key
         response = requests.get(base_url, params=params)
-        return response.json()
-    except:
+        data = response.json()
+        
+        # Catch API errors cleanly instead of crashing the app
+        if isinstance(data, dict) and "Error Message" in data:
+            st.error(f"FMP API Error: {data['Error Message']}")
+            return None
+            
+        return data
+    except Exception as e:
         return None
 
 @st.cache_data(ttl=300)
