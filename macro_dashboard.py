@@ -8,7 +8,6 @@ import feedparser
 import google.generativeai as genai
 import urllib.parse 
 import re 
-import requests
 from datetime import datetime, timedelta
 
 # 1. UI SETUP 
@@ -43,25 +42,6 @@ TABLE_STYLES = [
 ]
 
 # 2. DATA ENGINES
-@st.cache_data(ttl=3600)
-def fetch_fmp(endpoint, params={}):
-    """Primary Database: Financial Modeling Prep (FMP)"""
-    try:
-        api_key = st.secrets["FMP_API_KEY"]
-        base_url = f"https://financialmodelingprep.com/api/v3/{endpoint}"
-        params["apikey"] = api_key
-        response = requests.get(base_url, params=params)
-        data = response.json()
-        
-        # Catch API errors cleanly instead of crashing the app
-        if isinstance(data, dict) and "Error Message" in data:
-            st.error(f"FMP API Error: {data['Error Message']}")
-            return None
-            
-        return data
-    except Exception as e:
-        return None
-
 @st.cache_data(ttl=300)
 def fetch_yf(ticker):
     try:
@@ -106,23 +86,6 @@ def slice_data(df, start_date):
     if df is None or df.empty: return df
     return df.loc[start_date:]
 
-def create_gauge(score, title, color):
-    fig = go.Figure(go.Indicator(
-        mode = "gauge+number", value = score,
-        title = {'text': title, 'font': {'color': 'white', 'size': 18}},
-        gauge = {
-            'axis': {'range': [0, 10], 'tickwidth': 1, 'tickcolor': "white"},
-            'bar': {'color': color},
-            'bgcolor': "black", 'borderwidth': 2, 'bordercolor': "#333",
-            'steps': [
-                {'range': [0, 3], 'color': "rgba(0, 255, 65, 0.15)"},
-                {'range': [3, 7], 'color': "rgba(255, 185, 0, 0.15)"},
-                {'range': [7, 10], 'color': "rgba(255, 75, 75, 0.15)"}],
-        }
-    ))
-    fig.update_layout(height=250, margin=dict(l=20, r=20, t=50, b=20), paper_bgcolor='rgba(0,0,0,0)', font=dict(color="white"))
-    return fig
-
 # 3. HEADER
 st.title("MACRO & MARKETS TERMINAL")
 st.write(f"SYSTEM STATUS: ONLINE | HYBRID DATA PIPELINE | {datetime.now().strftime('%Y-%m-%d')}")
@@ -137,7 +100,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
 ])
 
 # ==========================================
-# TAB 1: MACRO DATA (FULLY RESTORED)
+# TAB 1: MACRO DATA
 # ==========================================
 with tab1:
     market_regions = {
@@ -383,8 +346,33 @@ with tab2:
                         display_text = re.sub(r'SENTIMENT_SCORE:.*', '', display_text)
                         
                         g1, g2 = st.columns(2)
-                        with g1: st.plotly_chart(create_gauge(risk_score, "Geopolitical/Macro Risk", "#ff4b4b"), use_container_width=True, config={'displayModeBar': False})
-                        with g2: st.plotly_chart(create_gauge(sent_score, "Economic Sentiment", "#00ff41"), use_container_width=True, config={'displayModeBar': False})
+                        with g1: st.plotly_chart(go.Figure(go.Indicator(
+                            mode = "gauge+number", value = risk_score,
+                            title = {'text': "Geopolitical/Macro Risk", 'font': {'color': 'white', 'size': 18}},
+                            gauge = {
+                                'axis': {'range': [0, 10], 'tickwidth': 1, 'tickcolor': "white"},
+                                'bar': {'color': "#ff4b4b"},
+                                'bgcolor': "black", 'borderwidth': 2, 'bordercolor': "#333",
+                                'steps': [
+                                    {'range': [0, 3], 'color': "rgba(0, 255, 65, 0.15)"},
+                                    {'range': [3, 7], 'color': "rgba(255, 185, 0, 0.15)"},
+                                    {'range': [7, 10], 'color': "rgba(255, 75, 75, 0.15)"}],
+                            }
+                        )).update_layout(height=250, margin=dict(l=20, r=20, t=50, b=20), paper_bgcolor='rgba(0,0,0,0)', font=dict(color="white")), use_container_width=True, config={'displayModeBar': False})
+                        
+                        with g2: st.plotly_chart(go.Figure(go.Indicator(
+                            mode = "gauge+number", value = sent_score,
+                            title = {'text': "Economic Sentiment", 'font': {'color': 'white', 'size': 18}},
+                            gauge = {
+                                'axis': {'range': [0, 10], 'tickwidth': 1, 'tickcolor': "white"},
+                                'bar': {'color': "#00ff41"},
+                                'bgcolor': "black", 'borderwidth': 2, 'bordercolor': "#333",
+                                'steps': [
+                                    {'range': [0, 3], 'color': "rgba(0, 255, 65, 0.15)"},
+                                    {'range': [3, 7], 'color': "rgba(255, 185, 0, 0.15)"},
+                                    {'range': [7, 10], 'color': "rgba(255, 75, 75, 0.15)"}],
+                            }
+                        )).update_layout(height=250, margin=dict(l=20, r=20, t=50, b=20), paper_bgcolor='rgba(0,0,0,0)', font=dict(color="white")), use_container_width=True, config={'displayModeBar': False})
                         
                         st.markdown(f"<div class='deal-intel'>\n\n{display_text}\n\n</div>", unsafe_allow_html=True)
                 except Exception as e:
@@ -402,11 +390,11 @@ with tab3:
     ticker_input_cat = st.text_input("Target Catalyst", "DIS", key="ticker_tab3", label_visibility="collapsed").upper()
     
     if ticker_input_cat:
-        with st.spinner(f"Querying global registries for {ticker_input_cat}..."):
+        with st.spinner(f"Querying market registries for {ticker_input_cat}..."):
             try:
-                # Resolve company name via FMP for better accuracy
-                fmp_profile = fetch_fmp(f"profile/{ticker_input_cat}")
-                company_name = fmp_profile[0].get('companyName', ticker_input_cat) if fmp_profile else ticker_input_cat
+                tgt_cat = yf.Ticker(ticker_input_cat)
+                info_cat = tgt_cat.info
+                company_name = info_cat.get('shortName', ticker_input_cat)
                 
                 st.markdown(f"#### {company_name} | Ownership and Activist Intelligence")
                 st.markdown("---")
@@ -414,23 +402,23 @@ with tab3:
                 col_ai, col_own = st.columns([1.5, 1])
                 
                 with col_ai:
-                    st.markdown("#### AI Deal Chatter and Catalyst Scanner")
-                    query_str = f'"{company_name}" AND (merger OR acquisition OR buyout OR activist OR takeover)'
+                    st.markdown("#### AI Deal Chatter Scanner")
+                    query_str = f'"{company_name}" AND (merger OR acquisition OR buyout OR activist)'
                     encoded_query = urllib.parse.quote(query_str)
                     feed = feedparser.parse(f"https://news.google.com/rss/search?q={encoded_query}&hl=en-US&gl=US&ceid=US:en")
                     articles = feed.entries[:6]
                     
-                    if st.button("Generate Event-Driven Briefing"):
+                    if st.button("Generate Catalyst Briefing"):
                         try:
                             genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
                             model = genai.GenerativeModel('gemini-2.5-flash')
                             brief_prompt = f"Summarize 3 strategic M&A/Activist catalysts for {company_name}: " + "\n".join([a.title for a in articles])
                             res = model.generate_content(brief_prompt)
                             st.markdown(f"<div class='deal-intel'>{res.text}</div>", unsafe_allow_html=True)
-                        except KeyError:
-                            st.error("Security Error: Gemini API Key not found.")
+                        except Exception as e:
+                            st.error("AI Engine Error. Check Gemini API key.")
                     
-                    st.markdown("<br><b>Raw Event-Driven Feed:</b>", unsafe_allow_html=True)
+                    st.markdown("<br><b>Raw Catalyst Wire:</b>", unsafe_allow_html=True)
                     if articles:
                         for a in articles:
                             with st.expander(a.title):
@@ -443,22 +431,36 @@ with tab3:
                     tab_inst, tab_insider = st.tabs(["Top Institutional Holders", "Recent Insider Trades"])
                     
                     with tab_inst:
-                        inst_data = fetch_fmp(f"institutional-holder/{ticker_input_cat}")
-                        if inst_data:
-                            df_inst = pd.DataFrame(inst_data).head(10)[['holder', 'shares', 'dateReported']]
-                            st.table(df_inst.style.format({'shares': '{:,.0f}'}).hide(axis="index").set_table_styles(TABLE_STYLES))
+                        inst_holders = tgt_cat.institutional_holders
+                        if inst_holders is not None and not inst_holders.empty:
+                            if 'Date Reported' in inst_holders.columns:
+                                inst_holders['Date Reported'] = pd.to_datetime(inst_holders['Date Reported']).dt.strftime('%Y-%m-%d')
+                            
+                            fmt_inst = {}
+                            if 'pctHeld' in inst_holders.columns: fmt_inst['pctHeld'] = "{:.2%}"
+                            if 'Shares' in inst_holders.columns: fmt_inst['Shares'] = "{:,.0f}"
+                            if 'Value' in inst_holders.columns: fmt_inst['Value'] = "${:,.0f}"
+                            
+                            st.table(inst_holders.style.format(fmt_inst, na_rep="N/A").hide(axis="index").set_table_styles(TABLE_STYLES))
                         else:
-                            st.info("Institutional data unavailable for this ticker in current registries.")
+                            st.info("Regulatory ownership data unavailable for this ticker/exchange.")
                             
                     with tab_insider:
-                        ins_data = fetch_fmp(f"insider-trading/{ticker_input_cat}")
-                        if ins_data:
-                            df_ins = pd.DataFrame(ins_data).head(10)[['reportingName', 'typeOfOwner', 'transactionType', 'securitiesTransacted', 'transactionDate']]
-                            st.table(df_ins.style.format({'securitiesTransacted': '{:,.0f}'}).hide(axis="index").set_table_styles(TABLE_STYLES))
+                        insider_trans = tgt_cat.insider_transactions
+                        if insider_trans is not None and not insider_trans.empty:
+                            recent_insider = insider_trans.head(10).copy()
+                            if 'Start Date' in recent_insider.columns:
+                                recent_insider['Start Date'] = pd.to_datetime(recent_insider['Start Date']).dt.strftime('%Y-%m-%d')
+                            
+                            fmt_ins = {}
+                            if 'Shares' in recent_insider.columns: fmt_ins['Shares'] = "{:,.0f}"
+                            if 'Value' in recent_insider.columns: fmt_ins['Value'] = "${:,.0f}"
+                            
+                            st.table(recent_insider.style.format(fmt_ins, na_rep="N/A").hide(axis="index").set_table_styles(TABLE_STYLES))
                         else:
-                            st.info("No recent insider transactions found in local filings.")
+                            st.info("No recent insider transactions found in public filings.")
             except Exception as e:
-                st.error(f"Registry connection error: {e}")
+                st.error("Registry connection error.")
 
 # ==========================================
 # TAB 4: VALUATION & M&A ENGINE
@@ -818,7 +820,6 @@ with st.expander("TERMINAL METHODOLOGY & DATA ARCHITECTURE"):
     ### Data Pipeline Architecture
     * **Market Data:** Real-time equity, FX, and commodity feeds are routed through the **Yahoo Finance API** using a fault-tolerant retry engine.
     * **Economic Benchmarks:** Sovereign yields (US 10Y/2Y) and recession indicators are pulled via the **FRED (Federal Reserve Economic Data)** API.
-    * **Global Corporate Registry:** Global ownership, institutional holders, and insider trading data are sourced directly from the **Financial Modeling Prep (FMP) API**.
 
     ### AI NLP Sentiment Engine
     * **Model:** Powered by **Gemini 2.5 Flash** via Google Generative AI.
@@ -829,7 +830,7 @@ with st.expander("TERMINAL METHODOLOGY & DATA ARCHITECTURE"):
 
     ### Target Overview & Catalysts
     * **Event-Driven AI Scanner:** Parses targeted Google News RSS feeds using `(merger OR acquisition OR buyout OR activist)` logic. Gemini synthesizes these into qualitative executive briefings.
-    * **Ownership Profiling:** Extracts live FMP data to track major institutional asset managers and C-suite insider trading activity across global exchanges.
+    * **Ownership Profiling:** Extracts public SEC filings data to track major institutional asset managers and C-suite insider trading activity across global exchanges.
 
     ### M&A Fundamentals Desk
     * **Valuation Logic:** Multiples (EV/EBITDA, P/E) are calculated using TTM (Trailing Twelve Months) data.
