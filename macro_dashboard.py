@@ -303,86 +303,80 @@ with tab2:
     with ai_col:
         st.markdown("**AI NLP BRIEFING**")
         
-        try:
-            api_key = st.secrets["GEMINI_API_KEY"]
-            
-            if st.button("Synthesize Executive Briefing"):
-                try:
-                    genai.configure(api_key=api_key)
-                    model = genai.GenerativeModel('gemini-2.5-flash')
+        if st.button("Synthesize Executive Briefing"):
+            try:
+                genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                model = genai.GenerativeModel('gemini-2.5-flash')
+                
+                prompt = f"""You are an elite Global Macro strategy analyst focusing on: {selected_topic}. 
+                Read these live market headlines and provide a highly structured executive summary focusing on how this news impacts capital markets, corporate valuations, or macroeconomic risk in this specific area.
+                
+                You MUST format your text response exactly like this (ensure there is a blank line after the header):
+                
+                ### [INSERT THEME 1 HERE]
+                * [Write 2 to 3 sentences providing a deep, highly detailed explanation of the market impact.]
+                
+                ### [INSERT THEME 2 HERE]
+                * [Write 2 to 3 sentences providing a deep, highly detailed explanation of the market impact.]
+                
+                ### [INSERT THEME 3 HERE]
+                * [Write 2 to 3 sentences providing a deep, highly detailed explanation of the market impact.]
+                
+                CRITICAL: At the very end of your response, output two integer scores representing the news sentiment on a scale of 0 to 10. Format them exactly like this on new lines:
+                RISK_SCORE: [Your Score 0-10] (10 = Extreme Geopolitical/Macro Panic, 0 = Total Peace)
+                SENTIMENT_SCORE: [Your Score 0-10] (10 = Euphoric Economic Boom, 0 = Severe Depression/Crash)
+                
+                Headlines to analyze:
+                {headline_text}"""
+                
+                with st.spinner(f"Running NLP algorithms on {selected_topic} market wire..."):
+                    response = model.generate_content(prompt)
+                    raw_text = response.text
                     
-                    prompt = f"""You are an elite Global Macro strategy analyst focusing on: {selected_topic}. 
-                    Read these live market headlines and provide a highly structured executive summary focusing on how this news impacts capital markets, corporate valuations, or macroeconomic risk in this specific area.
+                    risk_match = re.search(r'RISK_SCORE:\s*(\d+)', raw_text)
+                    sent_match = re.search(r'SENTIMENT_SCORE:\s*(\d+)', raw_text)
                     
-                    You MUST format your text response exactly like this (ensure there is a blank line after the header):
+                    risk_score = int(risk_match.group(1)) if risk_match else 5
+                    sent_score = int(sent_match.group(1)) if sent_match else 5
                     
-                    ### [INSERT THEME 1 HERE]
-                    * [Write 2 to 3 sentences providing a deep, highly detailed explanation of the market impact.]
+                    display_text = re.sub(r'RISK_SCORE:.*', '', raw_text)
+                    display_text = re.sub(r'SENTIMENT_SCORE:.*', '', display_text)
                     
-                    ### [INSERT THEME 2 HERE]
-                    * [Write 2 to 3 sentences providing a deep, highly detailed explanation of the market impact.]
+                    g1, g2 = st.columns(2)
+                    with g1: st.plotly_chart(go.Figure(go.Indicator(
+                        mode = "gauge+number", value = risk_score,
+                        title = {'text': "Geopolitical/Macro Risk", 'font': {'color': 'white', 'size': 18}},
+                        gauge = {
+                            'axis': {'range': [0, 10], 'tickwidth': 1, 'tickcolor': "white"},
+                            'bar': {'color': "#ff4b4b"},
+                            'bgcolor': "black", 'borderwidth': 2, 'bordercolor': "#333",
+                            'steps': [
+                                {'range': [0, 3], 'color': "rgba(0, 255, 65, 0.15)"},
+                                {'range': [3, 7], 'color': "rgba(255, 185, 0, 0.15)"},
+                                {'range': [7, 10], 'color': "rgba(255, 75, 75, 0.15)"}],
+                        }
+                    )).update_layout(height=250, margin=dict(l=20, r=20, t=50, b=20), paper_bgcolor='rgba(0,0,0,0)', font=dict(color="white")), use_container_width=True, config={'displayModeBar': False})
                     
-                    ### [INSERT THEME 3 HERE]
-                    * [Write 2 to 3 sentences providing a deep, highly detailed explanation of the market impact.]
+                    with g2: st.plotly_chart(go.Figure(go.Indicator(
+                        mode = "gauge+number", value = sent_score,
+                        title = {'text': "Economic Sentiment", 'font': {'color': 'white', 'size': 18}},
+                        gauge = {
+                            'axis': {'range': [0, 10], 'tickwidth': 1, 'tickcolor': "white"},
+                            'bar': {'color': "#00ff41"},
+                            'bgcolor': "black", 'borderwidth': 2, 'bordercolor': "#333",
+                            'steps': [
+                                {'range': [0, 3], 'color': "rgba(0, 255, 65, 0.15)"},
+                                {'range': [3, 7], 'color': "rgba(255, 185, 0, 0.15)"},
+                                {'range': [7, 10], 'color': "rgba(255, 75, 75, 0.15)"}],
+                        }
+                    )).update_layout(height=250, margin=dict(l=20, r=20, t=50, b=20), paper_bgcolor='rgba(0,0,0,0)', font=dict(color="white")), use_container_width=True, config={'displayModeBar': False})
                     
-                    CRITICAL: At the very end of your response, output two integer scores representing the news sentiment on a scale of 0 to 10. Format them exactly like this on new lines:
-                    RISK_SCORE: [Your Score 0-10] (10 = Extreme Geopolitical/Macro Panic, 0 = Total Peace)
-                    SENTIMENT_SCORE: [Your Score 0-10] (10 = Euphoric Economic Boom, 0 = Severe Depression/Crash)
-                    
-                    Headlines to analyze:
-                    {headline_text}"""
-                    
-                    with st.spinner(f"Running NLP algorithms on {selected_topic} market wire..."):
-                        response = model.generate_content(prompt)
-                        raw_text = response.text
-                        
-                        risk_match = re.search(r'RISK_SCORE:\s*(\d+)', raw_text)
-                        sent_match = re.search(r'SENTIMENT_SCORE:\s*(\d+)', raw_text)
-                        
-                        risk_score = int(risk_match.group(1)) if risk_match else 5
-                        sent_score = int(sent_match.group(1)) if sent_match else 5
-                        
-                        display_text = re.sub(r'RISK_SCORE:.*', '', raw_text)
-                        display_text = re.sub(r'SENTIMENT_SCORE:.*', '', display_text)
-                        
-                        g1, g2 = st.columns(2)
-                        with g1: st.plotly_chart(go.Figure(go.Indicator(
-                            mode = "gauge+number", value = risk_score,
-                            title = {'text': "Geopolitical/Macro Risk", 'font': {'color': 'white', 'size': 18}},
-                            gauge = {
-                                'axis': {'range': [0, 10], 'tickwidth': 1, 'tickcolor': "white"},
-                                'bar': {'color': "#ff4b4b"},
-                                'bgcolor': "black", 'borderwidth': 2, 'bordercolor': "#333",
-                                'steps': [
-                                    {'range': [0, 3], 'color': "rgba(0, 255, 65, 0.15)"},
-                                    {'range': [3, 7], 'color': "rgba(255, 185, 0, 0.15)"},
-                                    {'range': [7, 10], 'color': "rgba(255, 75, 75, 0.15)"}],
-                            }
-                        )).update_layout(height=250, margin=dict(l=20, r=20, t=50, b=20), paper_bgcolor='rgba(0,0,0,0)', font=dict(color="white")), use_container_width=True, config={'displayModeBar': False})
-                        
-                        with g2: st.plotly_chart(go.Figure(go.Indicator(
-                            mode = "gauge+number", value = sent_score,
-                            title = {'text': "Economic Sentiment", 'font': {'color': 'white', 'size': 18}},
-                            gauge = {
-                                'axis': {'range': [0, 10], 'tickwidth': 1, 'tickcolor': "white"},
-                                'bar': {'color': "#00ff41"},
-                                'bgcolor': "black", 'borderwidth': 2, 'bordercolor': "#333",
-                                'steps': [
-                                    {'range': [0, 3], 'color': "rgba(0, 255, 65, 0.15)"},
-                                    {'range': [3, 7], 'color': "rgba(255, 185, 0, 0.15)"},
-                                    {'range': [7, 10], 'color': "rgba(255, 75, 75, 0.15)"}],
-                            }
-                        )).update_layout(height=250, margin=dict(l=20, r=20, t=50, b=20), paper_bgcolor='rgba(0,0,0,0)', font=dict(color="white")), use_container_width=True, config={'displayModeBar': False})
-                        
-                        st.markdown(f"<div class='deal-intel'>\n\n{display_text}\n\n</div>", unsafe_allow_html=True)
-                except Exception as e:
-                    st.error(f"AI Engine Error: {e}")
-                    
-        except KeyError:
-            st.error("Security Error: Gemini API Key not found in Cloud Secrets.")
+                    st.markdown(f"<div class='deal-intel'>\n\n{display_text}\n\n</div>", unsafe_allow_html=True)
+            except Exception as e:
+                st.error(f"AI Engine Error: {e}")
 
 # ==========================================
-# TAB 3: TARGET OVERVIEW & CATALYSTS
+# TAB 3: TARGET OVERVIEW & CATALYSTS (FAULT TOLERANT)
 # ==========================================
 with tab3:
     st.markdown("### TARGET OVERVIEW AND QUALITATIVE CATALYSTS")
@@ -390,77 +384,85 @@ with tab3:
     ticker_input_cat = st.text_input("Target Catalyst", "DIS", key="ticker_tab3", label_visibility="collapsed").upper()
     
     if ticker_input_cat:
-        with st.spinner(f"Querying market registries for {ticker_input_cat}..."):
-            try:
-                tgt_cat = yf.Ticker(ticker_input_cat)
-                info_cat = tgt_cat.info
-                company_name = info_cat.get('shortName', ticker_input_cat)
-                
-                st.markdown(f"#### {company_name} | Ownership and Activist Intelligence")
-                st.markdown("---")
-                
-                col_ai, col_own = st.columns([1.5, 1])
-                
-                with col_ai:
-                    st.markdown("#### AI Deal Chatter Scanner")
-                    query_str = f'"{company_name}" AND (merger OR acquisition OR buyout OR activist)'
-                    encoded_query = urllib.parse.quote(query_str)
-                    feed = feedparser.parse(f"https://news.google.com/rss/search?q={encoded_query}&hl=en-US&gl=US&ceid=US:en")
-                    articles = feed.entries[:6]
+        st.markdown("---")
+        col_ai, col_own = st.columns([1.5, 1])
+        
+        tgt_cat = yf.Ticker(ticker_input_cat)
+        
+        # Safely extract company name without crashing
+        company_name = ticker_input_cat
+        try:
+            info_cat = tgt_cat.info
+            company_name = info_cat.get('shortName', ticker_input_cat)
+        except Exception:
+            pass 
+            
+        with col_ai:
+            st.markdown(f"#### AI Deal Chatter Scanner: {company_name}")
+            query_str = f'"{company_name}" AND (merger OR acquisition OR buyout OR activist)'
+            encoded_query = urllib.parse.quote(query_str)
+            feed = feedparser.parse(f"https://news.google.com/rss/search?q={encoded_query}&hl=en-US&gl=US&ceid=US:en")
+            articles = feed.entries[:6]
+            
+            if st.button("Generate Catalyst Briefing"):
+                try:
+                    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                    model = genai.GenerativeModel('gemini-2.5-flash')
+                    brief_prompt = f"Summarize 3 strategic M&A/Activist catalysts for {company_name}: " + "\n".join([a.title for a in articles])
                     
-                    if st.button("Generate Catalyst Briefing"):
-                        try:
-                            genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-                            model = genai.GenerativeModel('gemini-2.5-flash')
-                            brief_prompt = f"Summarize 3 strategic M&A/Activist catalysts for {company_name}: " + "\n".join([a.title for a in articles])
-                            res = model.generate_content(brief_prompt)
-                            st.markdown(f"<div class='deal-intel'>{res.text}</div>", unsafe_allow_html=True)
-                        except Exception as e:
-                            st.error("AI Engine Error. Check Gemini API key.")
+                    with st.spinner("Synthesizing market whispers..."):
+                        res = model.generate_content(brief_prompt)
+                        st.markdown(f"<div class='deal-intel'>{res.text}</div>", unsafe_allow_html=True)
+                except Exception as e:
+                    st.error("AI Engine Error. Ensure Gemini API key is valid in Streamlit Secrets.")
+            
+            st.markdown("<br><b>Raw Catalyst Wire:</b>", unsafe_allow_html=True)
+            if articles:
+                for a in articles:
+                    with st.expander(a.title):
+                        st.markdown(f"[View Source]({a.link})")
+            else:
+                st.info("No catalyst news available on the global wire.")
                     
-                    st.markdown("<br><b>Raw Catalyst Wire:</b>", unsafe_allow_html=True)
-                    if articles:
-                        for a in articles:
-                            with st.expander(a.title):
-                                st.markdown(f"[View Source]({a.link})")
+        with col_own:
+            st.markdown("#### Ownership and Filings")
+            tab_inst, tab_insider = st.tabs(["Top Institutional Holders", "Recent Insider Trades"])
+            
+            with tab_inst:
+                try:
+                    inst_holders = tgt_cat.institutional_holders
+                    if inst_holders is not None and not inst_holders.empty:
+                        if 'Date Reported' in inst_holders.columns:
+                            inst_holders['Date Reported'] = pd.to_datetime(inst_holders['Date Reported']).dt.strftime('%Y-%m-%d')
+                        
+                        fmt_inst = {}
+                        if 'pctHeld' in inst_holders.columns: fmt_inst['pctHeld'] = "{:.2%}"
+                        if 'Shares' in inst_holders.columns: fmt_inst['Shares'] = "{:,.0f}"
+                        if 'Value' in inst_holders.columns: fmt_inst['Value'] = "${:,.0f}"
+                        
+                        st.table(inst_holders.style.format(fmt_inst, na_rep="N/A").hide(axis="index").set_table_styles(TABLE_STYLES))
                     else:
-                        st.write("No catalyst news available.")
-                            
-                with col_own:
-                    st.markdown("#### Ownership and Filings")
-                    tab_inst, tab_insider = st.tabs(["Top Institutional Holders", "Recent Insider Trades"])
+                        st.info("Regulatory ownership data unavailable for this ticker.")
+                except Exception as e:
+                    st.warning(f"Yahoo Finance API blocked or rate-limited. Could not fetch Institutional data.")
                     
-                    with tab_inst:
-                        inst_holders = tgt_cat.institutional_holders
-                        if inst_holders is not None and not inst_holders.empty:
-                            if 'Date Reported' in inst_holders.columns:
-                                inst_holders['Date Reported'] = pd.to_datetime(inst_holders['Date Reported']).dt.strftime('%Y-%m-%d')
-                            
-                            fmt_inst = {}
-                            if 'pctHeld' in inst_holders.columns: fmt_inst['pctHeld'] = "{:.2%}"
-                            if 'Shares' in inst_holders.columns: fmt_inst['Shares'] = "{:,.0f}"
-                            if 'Value' in inst_holders.columns: fmt_inst['Value'] = "${:,.0f}"
-                            
-                            st.table(inst_holders.style.format(fmt_inst, na_rep="N/A").hide(axis="index").set_table_styles(TABLE_STYLES))
-                        else:
-                            st.info("Regulatory ownership data unavailable for this ticker/exchange.")
-                            
-                    with tab_insider:
-                        insider_trans = tgt_cat.insider_transactions
-                        if insider_trans is not None and not insider_trans.empty:
-                            recent_insider = insider_trans.head(10).copy()
-                            if 'Start Date' in recent_insider.columns:
-                                recent_insider['Start Date'] = pd.to_datetime(recent_insider['Start Date']).dt.strftime('%Y-%m-%d')
-                            
-                            fmt_ins = {}
-                            if 'Shares' in recent_insider.columns: fmt_ins['Shares'] = "{:,.0f}"
-                            if 'Value' in recent_insider.columns: fmt_ins['Value'] = "${:,.0f}"
-                            
-                            st.table(recent_insider.style.format(fmt_ins, na_rep="N/A").hide(axis="index").set_table_styles(TABLE_STYLES))
-                        else:
-                            st.info("No recent insider transactions found in public filings.")
-            except Exception as e:
-                st.error("Registry connection error.")
+            with tab_insider:
+                try:
+                    insider_trans = tgt_cat.insider_transactions
+                    if insider_trans is not None and not insider_trans.empty:
+                        recent_insider = insider_trans.head(10).copy()
+                        if 'Start Date' in recent_insider.columns:
+                            recent_insider['Start Date'] = pd.to_datetime(recent_insider['Start Date']).dt.strftime('%Y-%m-%d')
+                        
+                        fmt_ins = {}
+                        if 'Shares' in recent_insider.columns: fmt_ins['Shares'] = "{:,.0f}"
+                        if 'Value' in recent_insider.columns: fmt_ins['Value'] = "${:,.0f}"
+                        
+                        st.table(recent_insider.style.format(fmt_ins, na_rep="N/A").hide(axis="index").set_table_styles(TABLE_STYLES))
+                    else:
+                        st.info("No recent insider transactions found in public filings.")
+                except Exception as e:
+                    st.warning(f"Yahoo Finance API blocked or rate-limited. Could not fetch Insider data.")
 
 # ==========================================
 # TAB 4: VALUATION & M&A ENGINE
